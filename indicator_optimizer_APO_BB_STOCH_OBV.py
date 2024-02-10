@@ -10,10 +10,10 @@ from joblib import Parallel, delayed
 from tqdm import tqdm
 
 
-START_DATE = '2023-10-01'
+START_DATE = '2021-01-01'
 END_DATE = '2023-12-31'
-INIT_POINTS = 2
-N_ITER = 2
+INIT_POINTS = 400
+N_ITER = 40
 PAIR_POINTS = INIT_POINTS + N_ITER
 MAX_HOLD_TIME = 720  # 12 hours in minutes
 
