@@ -2,12 +2,12 @@ import subprocess
 
 configs = [
     ("BCHXBT_1min_Kraken.csv", {
-        'apo_fast_min': 10, 'apo_fast_max': 30,  # Wider range for APO fast period
+        'apo_fast_min': 10, 'apo_fast_max': 40,  # Wider range for APO fast period
         'apo_slow_min': 20, 'apo_slow_max': 60,  # Wider range for APO slow period
-        'stoch_k_period_min': 10, 'stoch_k_period_max': 25,  # Wider range for Stochastic K period
-        'slow_k_period_min': 3, 'slow_k_period_max': 8,  # Wider range for Stochastic Slow K period
-        'slow_d_period_min': 3, 'slow_d_period_max': 8,  # Wider range for Stochastic Slow D period
-        'obv_ema_period_min': 5, 'obv_ema_period_max': 30,  # Wider range for OBV EMA period
+        'stoch_k_period_min': 10, 'stoch_k_period_max': 30,  # Wider range for Stochastic K period
+        'stoch_slow_k_period_min': 3, 'stoch_slow_k_period_max': 8,  # Wider range for Stochastic Slow K period
+        'stoch_slow_d_period_min': 3, 'stoch_slow_d_period_max': 8,  # Wider range for Stochastic Slow D period
+        'obv_ema_period_min': 5, 'obv_ema_period_max': 40,  # Wider range for OBV EMA period
         'bb_period_min': 5, 'bb_period_max': 30,  # Wider range for Bollinger Bands period
         'bb_dev_lower_min': 1, 'bb_dev_lower_max': 3,  # Wider range for Bollinger Bands lower deviation
         'bb_dev_upper_min': 1, 'bb_dev_upper_max': 3,  # Wider range for Bollinger Bands upper deviation
@@ -16,12 +16,12 @@ configs = [
     }),
 
     ("ETHXBT_1min_Kraken.csv", {
-        'apo_fast_min': 10, 'apo_fast_max': 30,  # Wider range for APO fast period
+        'apo_fast_min': 10, 'apo_fast_max': 40,  # Wider range for APO fast period
         'apo_slow_min': 20, 'apo_slow_max': 60,  # Wider range for APO slow period
-        'stoch_k_period_min': 10, 'stoch_k_period_max': 25,  # Wider range for Stochastic K period
-        'slow_k_period_min': 3, 'slow_k_period_max': 8,  # Wider range for Stochastic Slow K period
-        'slow_d_period_min': 3, 'slow_d_period_max': 8,  # Wider range for Stochastic Slow D period
-        'obv_ema_period_min': 5, 'obv_ema_period_max': 30,  # Wider range for OBV EMA period
+        'stoch_k_period_min': 10, 'stoch_k_period_max': 30,  # Wider range for Stochastic K period
+        'stoch_slow_k_period_min': 3, 'stoch_slow_k_period_max': 8,  # Wider range for Stochastic Slow K period
+        'stoch_slow_d_period_min': 3, 'stoch_slow_d_period_max': 8,  # Wider range for Stochastic Slow D period
+        'obv_ema_period_min': 5, 'obv_ema_period_max': 40,  # Wider range for OBV EMA period
         'bb_period_min': 5, 'bb_period_max': 30,  # Wider range for Bollinger Bands period
         'bb_dev_lower_min': 1, 'bb_dev_lower_max': 3,  # Wider range for Bollinger Bands lower deviation
         'bb_dev_upper_min': 1, 'bb_dev_upper_max': 3,  # Wider range for Bollinger Bands upper deviation
@@ -30,12 +30,12 @@ configs = [
     }),
 
     ("MATICXBT_1min_Kraken.csv", {
-        'apo_fast_min': 10, 'apo_fast_max': 30,  # Wider range for APO fast period
+        'apo_fast_min': 10, 'apo_fast_max': 40,  # Wider range for APO fast period
         'apo_slow_min': 20, 'apo_slow_max': 60,  # Wider range for APO slow period
-        'stoch_k_period_min': 10, 'stoch_k_period_max': 25,  # Wider range for Stochastic K period
-        'slow_k_period_min': 3, 'slow_k_period_max': 8,  # Wider range for Stochastic Slow K period
-        'slow_d_period_min': 3, 'slow_d_period_max': 8,  # Wider range for Stochastic Slow D period
-        'obv_ema_period_min': 5, 'obv_ema_period_max': 30,  # Wider range for OBV EMA period
+        'stoch_k_period_min': 10, 'stoch_k_period_max': 30,  # Wider range for Stochastic K period
+        'stoch_slow_k_period_min': 3, 'stoch_slow_k_period_max': 8,  # Wider range for Stochastic Slow K period
+        'stoch_slow_d_period_min': 3, 'stoch_slow_d_period_max': 8,  # Wider range for Stochastic Slow D period
+        'obv_ema_period_min': 5, 'obv_ema_period_max': 40,  # Wider range for OBV EMA period
         'bb_period_min': 5, 'bb_period_max': 30,  # Wider range for Bollinger Bands period
         'bb_dev_lower_min': 1, 'bb_dev_lower_max': 3,  # Wider range for Bollinger Bands lower deviation
         'bb_dev_upper_min': 1, 'bb_dev_upper_max': 3,  # Wider range for Bollinger Bands upper deviation
@@ -55,10 +55,10 @@ for filename, pbounds in configs:
         '--apo_slow_max', str(pbounds['apo_slow_max']),
         '--stoch_k_period_min', str(pbounds['stoch_k_period_min']),
         '--stoch_k_period_max', str(pbounds['stoch_k_period_max']),
-        '--slow_k_period_min', str(pbounds['slow_k_period_min']),
-        '--slow_k_period_max', str(pbounds['slow_k_period_max']),
-        '--slow_d_period_min', str(pbounds['slow_d_period_min']),
-        '--slow_d_period_max', str(pbounds['slow_d_period_max']),
+        '--stoch_slow_k_period_min', str(pbounds['stoch_slow_k_period_min']),
+        '--stoch_slow_k_period_max', str(pbounds['stoch_slow_k_period_max']),
+        '--stoch_slow_d_period_min', str(pbounds['stoch_slow_d_period_min']),
+        '--stoch_slow_d_period_max', str(pbounds['stoch_slow_d_period_max']),
         '--obv_ema_period_min', str(pbounds['obv_ema_period_min']),
         '--obv_ema_period_max', str(pbounds['obv_ema_period_max']),
         '--bb_period_min', str(pbounds['bb_period_min']),

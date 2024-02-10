@@ -2,14 +2,18 @@ import argparse
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import multiprocessing
 import seaborn as sns
 import os
 from datetime import datetime
-from bayes_opt import BayesianOptimization
+from bayes_opt import BayesianOptimization, UtilityFunction
+from joblib import Parallel, delayed
+from tqdm import tqdm
+
 
 START_DATE = '2023-11-01'
 END_DATE = '2024-02-01'
-INIT_POINTS = 30
+INIT_POINTS = 500
 N_ITER = 100
 PAIR_POINTS = INIT_POINTS + N_ITER
 MAX_HOLD_TIME = 720  # 12 hours in minutes
@@ -66,10 +70,10 @@ class SignalOptimizer:
         obv_ema = pd.Series(obv).ewm(span=ema_period, adjust=False).mean()
         return obv_ema
 
-    def evaluate_performance(self, apo_fast_period, apo_slow_period, stoch_k_period, slow_k_period, slow_d_period, obv_ema_period, bb_period, bb_dev_lower, bb_dev_upper, arming_pct, stop_loss_pct):
+    def evaluate_performance(self, apo_fast_period, apo_slow_period, stoch_k_period, stoch_slow_k_period, stoch_slow_d_period, obv_ema_period, bb_period, bb_dev_lower, bb_dev_upper, arming_pct, stop_loss_pct):
         upper_band, lower_band = self.calculate_bollinger_bands(bb_period, bb_dev_lower, bb_dev_upper)
         apo_values = self.calculate_apo(apo_fast_period, apo_slow_period)
-        stoch_avg = self.calculate_stochastic_oscillator(stoch_k_period, slow_k_period, slow_d_period)
+        stoch_avg = self.calculate_stochastic_oscillator(stoch_k_period, stoch_slow_k_period, stoch_slow_d_period)
         obv_ema_values = self.calculate_obv(obv_ema_period)
 
         initial_balance = 1.0
@@ -123,15 +127,40 @@ class SignalOptimizer:
 
         return total_percent_gain
 
+    def evaluate_wrapper(self, params, _):
+        return params, self.evaluate_performance(**params)
+
     def optimize(self):
         optimizer = BayesianOptimization(
-            f=self.evaluate_performance,
+            f=None,  # Function evaluation is handled separately
             pbounds=self.PBOUNDS,
             random_state=1,
             verbose=2
         )
+        # Generate initial points
+        utility = UtilityFunction(kind="ucb", kappa=2.5, xi=0.0)
+        init_points = [optimizer.suggest(utility) for _ in range(INIT_POINTS)]
 
-        optimizer.maximize(init_points=INIT_POINTS, n_iter=N_ITER)
+        # Get the number of CPU cores
+        num_cpu_cores = multiprocessing.cpu_count()
+        n_jobs = max(1, num_cpu_cores // 3)  # Ensure at least 1 job
+
+        # Parallel evaluation of initial points with tqdm progress bar
+        with tqdm(total=INIT_POINTS, desc="Evaluating initial points") as pbar:
+            init_results = Parallel(n_jobs=n_jobs, backend="multiprocessing")(
+                delayed(self.evaluate_wrapper)(params, self) for params in init_points
+            )
+            for params, result in init_results:
+                optimizer.register(params=params, target=result)
+                pbar.update(1)
+
+        # Sequential Bayesian optimization for further iterations with tqdm progress bar
+        with tqdm(total=N_ITER, desc="Optimizing points") as pbar:
+            for _ in range(N_ITER):
+                next_params = optimizer.suggest(utility)
+                result = self.evaluate_performance(**next_params)
+                optimizer.register(params=next_params, target=result)
+                pbar.update(1)
 
         sorted_results = sorted(optimizer.res, key=lambda x: x['target'], reverse=True)
         self.top_results = sorted_results[:PAIR_POINTS] if len(sorted_results) >= PAIR_POINTS else sorted_results
@@ -146,15 +175,24 @@ class SignalOptimizer:
         results_df = pd.DataFrame([res['params'] for res in self.top_results])
         results_df['profit'] = [res['target'] for res in self.top_results]
 
-        pairplot = sns.pairplot(results_df, diag_kind='kde', plot_kws={'alpha': 0.6, 's': 80, 'edgecolor': 'k'}, height=2)
-        # Extract dataset name from the filepath and use it as the plot title
-        dataset_name = os.path.basename(self.filepath).split('.')[0]
-        pairplot.figure.suptitle(f'{dataset_name}_{START_DATE}_to_{END_DATE} - Parameter Relationships and Profit Distribution', y=1.02)
+        filtered_results_df = results_df[results_df['profit'] != 0]
 
+        if filtered_results_df.empty:
+            print("No results to visualize after filtering out zero profits.")
+            return
+
+        # Correctly generate the pairplot without creating a new figure
+        pairplot = sns.pairplot(filtered_results_df, diag_kind='kde', plot_kws={'alpha': 0.6, 's': 80, 'edgecolor': 'k'}, height=2)
+
+        # Extract dataset name from the filepath
         dataset_name = os.path.basename(self.filepath).split('.')[0]
+
+        # Set the figure title directly on the pairplot's figure object
+        pairplot.fig.suptitle(f'{dataset_name}', size=12)
+
+        # Prepare to save and show the plot
         subfolder = os.path.join('indicator_optimizer_plots', dataset_name)
         os.makedirs(subfolder, exist_ok=True)
-
         time_str = datetime.now().strftime('%Y%m%d_%H%M%S')
         filename = f"{dataset_name}_PairPlot_{START_DATE}_to_{END_DATE}_Date_{time_str}.png"
         plt.savefig(os.path.join(subfolder, filename))
@@ -171,10 +209,10 @@ def parse_args():
     parser.add_argument("--apo_slow_max", type=int, default=30, help="Maximum APO slow period")
     parser.add_argument("--stoch_k_period_min", type=int, default=5, help="Minimum Stochastic K period")
     parser.add_argument("--stoch_k_period_max", type=int, default=14, help="Maximum Stochastic K period")
-    parser.add_argument("--slow_k_period_min", type=int, default=3, help="Minimum Stochastic Slow K period")
-    parser.add_argument("--slow_k_period_max", type=int, default=5, help="Maximum Stochastic Slow K period")
-    parser.add_argument("--slow_d_period_min", type=int, default=3, help="Minimum Stochastic Slow D period")
-    parser.add_argument("--slow_d_period_max", type=int, default=5, help="Maximum Stochastic Slow D period")
+    parser.add_argument("--stoch_slow_k_period_min", type=int, default=3, help="Minimum Stochastic Slow K period")
+    parser.add_argument("--stoch_slow_k_period_max", type=int, default=5, help="Maximum Stochastic Slow K period")
+    parser.add_argument("--stoch_slow_d_period_min", type=int, default=3, help="Minimum Stochastic Slow D period")
+    parser.add_argument("--stoch_slow_d_period_max", type=int, default=5, help="Maximum Stochastic Slow D period")
     parser.add_argument("--obv_ema_period_min", type=int, default=10, help="Minimum OBV EMA period")
     parser.add_argument("--obv_ema_period_max", type=int, default=20, help="Maximum OBV EMA period")
     parser.add_argument("--bb_period_min", type=int, default=5, help="Minimum Bollinger Bands period")
@@ -207,8 +245,8 @@ if __name__ == "__main__":
         'apo_fast_period': (args.apo_fast_min, args.apo_fast_max),
         'apo_slow_period': (args.apo_slow_min, args.apo_slow_max),
         'stoch_k_period': (args.stoch_k_period_min, args.stoch_k_period_max),
-        'slow_k_period': (args.slow_k_period_min, args.slow_k_period_max),
-        'slow_d_period': (args.slow_d_period_min, args.slow_d_period_max),
+        'stoch_slow_k_period': (args.stoch_slow_k_period_min, args.stoch_slow_k_period_max),
+        'stoch_slow_d_period': (args.stoch_slow_d_period_min, args.stoch_slow_d_period_max),
         'obv_ema_period': (args.obv_ema_period_min, args.obv_ema_period_max),
         'bb_period': (args.bb_period_min, args.bb_period_max),
         'bb_dev_lower': (args.bb_dev_lower_min, args.bb_dev_lower_max),
