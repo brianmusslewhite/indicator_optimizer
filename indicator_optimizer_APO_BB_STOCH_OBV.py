@@ -13,7 +13,7 @@ from tqdm import tqdm
 START_DATE = '2023-01-01'
 END_DATE = '2023-12-31'
 INIT_POINTS = 500
-N_ITER = 50
+N_ITER = 20
 PAIR_POINTS = INIT_POINTS + N_ITER
 MAX_HOLD_TIME = 720  # 12 hours in minutes
 
@@ -52,6 +52,7 @@ class SignalOptimizer:
         self.best_buy_points = []
         self.best_sell_points = []
         self.best_performance = float('-inf')
+        self.param_to_results = {}
 
     def calculate_bollinger_bands(self, period, deviation_lower, deviation_upper):
         period = int(period)
@@ -146,9 +147,10 @@ class SignalOptimizer:
 
         return total_percent_gain, buy_points, sell_points
 
-    def evaluate_wrapper(self, params, _):
+    def evaluate_wrapper(self, params):
         performance, buy_points, sell_points = self.evaluate_performance(**params)
-        return params, performance
+        self.param_to_results[str(params)] = (buy_points, sell_points)
+        return performance
 
     def optimize(self):
         optimizer = BayesianOptimization(
@@ -160,19 +162,20 @@ class SignalOptimizer:
         utility = UtilityFunction(kind="ucb", kappa=2.5, xi=0.0)
         init_points = [optimizer.suggest(utility) for _ in range(INIT_POINTS)]
 
-        # Parallel evaluation of initial points with tqdm progress bar
+        # Adjust this loop in the optimize method
         results = Parallel(n_jobs=self.number_of_cores, backend="multiprocessing")(
-            delayed(self.evaluate_wrapper)(params, self) for params in tqdm(init_points, desc="Evaluating initial points")
+            delayed(self.evaluate_wrapper)(params) for params in tqdm(init_points, desc="Evaluating initial points")
         )
-        for params, result in results:
-            optimizer.register(params=params, target=result)
+        for idx, performance in enumerate(results):
+            params = init_points[idx]  # Get parameters used for this iteration
+            optimizer.register(params=params, target=performance)
 
-        # Sequential Bayesian optimization for further iterations with tqdm progress bar
+        # Sequential Bayesian optimization
         with tqdm(total=N_ITER, desc="Optimizing points") as pbar:
             for _ in range(N_ITER):
                 next_params = optimizer.suggest(utility)
-                result = self.evaluate_performance(**next_params)
-                optimizer.register(params=next_params, target=result)
+                performance, _, _ = self.evaluate_performance(**next_params)  # Adjusted to unpack the tuple
+                optimizer.register(params=next_params, target=performance)  # Only pass the performance metric
                 pbar.update(1)
 
         sorted_results = sorted(optimizer.res, key=lambda x: x['target'], reverse=True)
@@ -217,13 +220,7 @@ class SignalOptimizer:
         plt.figure(figsize=(14, 7))
         plt.plot(self.data['time'], self.data['close'], label='Close Price', alpha=0.5)
 
-        print(f"Buy points: {buy_points}")
-        print(f"Sell points: {sell_points}")
-
-        # Plot buy points
         plt.scatter(self.data.loc[self.data.index.isin(buy_points), 'time'], self.data.loc[self.data.index.isin(buy_points), 'close'], label='Buy', marker='^', color='green', alpha=1)
-
-        # Plot sell points
         plt.scatter(self.data.loc[self.data.index.isin(sell_points), 'time'], self.data.loc[self.data.index.isin(sell_points), 'close'], label='Sell', marker='v', color='red', alpha=1)
 
         plt.title(f'{dataset_name}_{START_DATE}_to_{END_DATE}')
@@ -275,16 +272,12 @@ def run_optimization(filename, pbounds, number_of_cores):
     top_results = optimizer.optimize()
 
     if top_results:
-        # Extract the best parameters from the optimization results
         best_params = top_results[0]['params']
+        final_performance, final_buy_points, final_sell_points = optimizer.evaluate_performance(**best_params)
 
         print(f"Optimized Indicator Parameters: {best_params}")
         print(f"Best Target Value (Performance Metric): {top_results[0]['target']}")
 
-        # Perform a final evaluation using the best parameters
-        final_performance, final_buy_points, final_sell_points = optimizer.evaluate_performance(**best_params)
-
-        # Visualize the results if desired
         optimizer.visualize_top_results()
         optimizer.plot_trades(final_buy_points, final_sell_points)
 
