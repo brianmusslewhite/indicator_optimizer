@@ -10,10 +10,10 @@ from joblib import Parallel, delayed
 from tqdm import tqdm
 
 
-START_DATE = '2023-11-01'
-END_DATE = '2024-02-01'
+START_DATE = '2023-01-01'
+END_DATE = '2023-12-31'
 INIT_POINTS = 500
-N_ITER = 100
+N_ITER = 50
 PAIR_POINTS = INIT_POINTS + N_ITER
 MAX_HOLD_TIME = 720  # 12 hours in minutes
 
@@ -33,10 +33,25 @@ class SignalOptimizer:
             dtype={'close': 'float32', 'high': 'float32', 'low': 'float32', 'volume': 'float32'}
         )
 
-        self.data = self.data.loc[START_DATE:END_DATE]
+        available_start_date = self.data.index.min()
+        available_end_date = self.data.index.max()
+        start_date = max(pd.Timestamp(START_DATE), available_start_date)
+        end_date = min(pd.Timestamp(END_DATE), available_end_date)
+
+        if start_date > end_date:
+            raise ValueError("Adjusted start date is after the adjusted end date. No data available for the given range.")
+        if start_date != pd.Timestamp(START_DATE) or end_date != pd.Timestamp(END_DATE):
+            print(f"Date range adjusted based on available data: {start_date.date()} to {end_date.date()}")
+        self.data = self.data.loc[start_date:end_date]
+        if self.data.empty:
+            raise ValueError(f"No data available between {start_date} and {end_date} after adjustments.")
+
         self.data.ffill(inplace=True)
         self.data.reset_index(inplace=True)
         self.data_frequency_in_minutes = 1
+        self.best_buy_points = []
+        self.best_sell_points = []
+        self.best_performance = float('-inf')
 
     def calculate_bollinger_bands(self, period, deviation_lower, deviation_upper):
         period = int(period)
@@ -84,23 +99,26 @@ class SignalOptimizer:
         highest_price_after_buy = 0.0
         armed = False
         entry_index = -1
+        buy_points = []
+        sell_points = []
 
         for i in range(1, len(self.data)):
             current_price = self.data['close'].iloc[i]
             signals_met = 0
 
-            # Check for various buy signals...
+            # Check for buy signals
             if apo_values.iloc[i] > 0 and apo_values.iloc[i-1] <= 0:
                 signals_met += 1
             if stoch_avg.iloc[i] <= 20:
                 signals_met += 1
             if obv_ema_values.iloc[i] > obv_ema_values.iloc[i-1]:
                 signals_met += 1
-            if current_price < lower_band.iloc[i]:
+            if current_price < lower_band[i]:
                 signals_met += 1
 
             # Logic for opening position
             if signals_met >= 4 and not position_open:
+                buy_points.append(self.data.index[i])
                 position_open = True
                 entry_price = current_price
                 highest_price_after_buy = current_price
@@ -114,6 +132,7 @@ class SignalOptimizer:
                     armed = True
 
                 if armed and current_price <= highest_price_after_buy * (1 - stop_loss_pct / 100) or max_holding_time_reached:
+                    sell_points.append(self.data.index[i])
                     trade_return = (current_price - entry_price) / entry_price  # Calculate return of the trade
                     capital_at_risk = current_balance * 0.10  # 10% of current capital at risk
                     profit_from_trade = capital_at_risk * trade_return  # Profit from the 10% capital used
@@ -125,10 +144,11 @@ class SignalOptimizer:
         # Calculate the final percent gain over the entire period
         total_percent_gain = (current_balance - initial_balance) / initial_balance * 100
 
-        return total_percent_gain
+        return total_percent_gain, buy_points, sell_points
 
     def evaluate_wrapper(self, params, _):
-        return params, self.evaluate_performance(**params)
+        performance, buy_points, sell_points = self.evaluate_performance(**params)
+        return params, performance
 
     def optimize(self):
         optimizer = BayesianOptimization(
@@ -181,13 +201,41 @@ class SignalOptimizer:
         dataset_name = os.path.basename(self.filepath).split('.')[0]
 
         # Set the figure title directly on the pairplot's figure object
-        pairplot.fig.suptitle(f'{dataset_name}', size=12)
+        pairplot.figure.suptitle(f'{dataset_name}', size=12)
 
         # Prepare to save and show the plot
         subfolder = os.path.join('indicator_optimizer_plots', dataset_name)
         os.makedirs(subfolder, exist_ok=True)
         time_str = datetime.now().strftime('%Y%m%d_%H%M%S')
         filename = f"{dataset_name}_PairPlot_{START_DATE}_to_{END_DATE}_Date_{time_str}.png"
+        plt.savefig(os.path.join(subfolder, filename))
+
+        plt.show()
+
+    def plot_trades(self, buy_points, sell_points):
+        dataset_name = os.path.basename(self.filepath).split('.')[0]
+        plt.figure(figsize=(14, 7))
+        plt.plot(self.data['time'], self.data['close'], label='Close Price', alpha=0.5)
+
+        print(f"Buy points: {buy_points}")
+        print(f"Sell points: {sell_points}")
+
+        # Plot buy points
+        plt.scatter(self.data.loc[self.data.index.isin(buy_points), 'time'], self.data.loc[self.data.index.isin(buy_points), 'close'], label='Buy', marker='^', color='green', alpha=1)
+
+        # Plot sell points
+        plt.scatter(self.data.loc[self.data.index.isin(sell_points), 'time'], self.data.loc[self.data.index.isin(sell_points), 'close'], label='Sell', marker='v', color='red', alpha=1)
+
+        plt.title(f'{dataset_name}_{START_DATE}_to_{END_DATE}')
+        plt.xlabel('Time')
+        plt.ylabel('Price')
+        plt.legend()
+
+        # Prepare to save and show the plot
+        subfolder = os.path.join('indicator_optimizer_plots', dataset_name)
+        os.makedirs(subfolder, exist_ok=True)
+        time_str = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f"{dataset_name}_BUYSELLResults_{START_DATE}_to_{END_DATE}_Date_{time_str}.png"
         plt.savefig(os.path.join(subfolder, filename))
 
         plt.show()
@@ -227,9 +275,18 @@ def run_optimization(filename, pbounds, number_of_cores):
     top_results = optimizer.optimize()
 
     if top_results:
-        print(f"Optimized Indicator Parameters: {top_results[0]['params']}")
+        # Extract the best parameters from the optimization results
+        best_params = top_results[0]['params']
+
+        print(f"Optimized Indicator Parameters: {best_params}")
         print(f"Best Target Value (Performance Metric): {top_results[0]['target']}")
+
+        # Perform a final evaluation using the best parameters
+        final_performance, final_buy_points, final_sell_points = optimizer.evaluate_performance(**best_params)
+
+        # Visualize the results if desired
         optimizer.visualize_top_results()
+        optimizer.plot_trades(final_buy_points, final_sell_points)
 
 
 if __name__ == "__main__":
