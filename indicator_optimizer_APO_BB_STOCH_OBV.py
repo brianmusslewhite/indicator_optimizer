@@ -7,15 +7,10 @@ import os
 from datetime import datetime
 from bayes_opt import BayesianOptimization
 
-import cProfile
-pr = cProfile.Profile()
-pr.enable()
-
-# Constants and Initial Settings
-START_DATE = '2023-06-01'
+START_DATE = '2023-11-01'
 END_DATE = '2024-02-01'
-INIT_POINTS = 20
-N_ITER = 5
+INIT_POINTS = 30
+N_ITER = 100
 PAIR_POINTS = INIT_POINTS + N_ITER
 MAX_HOLD_TIME = 720  # 12 hours in minutes
 
@@ -40,6 +35,7 @@ class SignalOptimizer:
         self.data_frequency_in_minutes = 1
 
     def calculate_bollinger_bands(self, period, deviation_lower, deviation_upper):
+        period = int(period)
         sma = self.data['close'].rolling(window=period).mean()
         std = self.data['close'].rolling(window=period).std()
         upper_band = sma + (std * deviation_upper)
@@ -52,77 +48,80 @@ class SignalOptimizer:
         return fast_ema - slow_ema
 
     def calculate_stochastic_oscillator(self, k_period, slow_k_period, slow_d_period):
-        # Ensure parameters are integers
         k_period = int(k_period)
         slow_k_period = int(slow_k_period)
         slow_d_period = int(slow_d_period)
 
-        # Calculate Fast-K
         low_min = self.data['low'].rolling(window=k_period).min()
         high_max = self.data['high'].rolling(window=k_period).max()
         fast_k = ((self.data['close'] - low_min) / (high_max - low_min)) * 100
 
-        # Calculate Slow-K (SMA of Fast-K)
         slow_k = fast_k.rolling(window=slow_k_period).mean()
-
-        # Calculate Slow-D (SMA of Slow-K)
         slow_d = slow_k.rolling(window=slow_d_period).mean()
-
-        return slow_k, slow_d
+        stoch_avg = (slow_k + slow_d) / 2
+        return stoch_avg
 
     def calculate_obv(self, ema_period):
         obv = np.where(self.data['close'] > self.data['close'].shift(), self.data['volume'], -self.data['volume']).cumsum()
         obv_ema = pd.Series(obv).ewm(span=ema_period, adjust=False).mean()
         return obv_ema
 
-    def evaluate_performance(self, period, deviation_lower, deviation_upper, obv_ema_period, arming_pct, stop_loss_pct, buy_signals_threshold):
-        total_profit = 0.0
+    def evaluate_performance(self, apo_fast_period, apo_slow_period, stoch_k_period, slow_k_period, slow_d_period, obv_ema_period, bb_period, bb_dev_lower, bb_dev_upper, arming_pct, stop_loss_pct):
+        upper_band, lower_band = self.calculate_bollinger_bands(bb_period, bb_dev_lower, bb_dev_upper)
+        apo_values = self.calculate_apo(apo_fast_period, apo_slow_period)
+        stoch_avg = self.calculate_stochastic_oscillator(stoch_k_period, slow_k_period, slow_d_period)
+        obv_ema_values = self.calculate_obv(obv_ema_period)
+
+        initial_balance = 1.0
+        current_balance = initial_balance
+
         position_open = False
         entry_price = 0.0
         highest_price_after_buy = 0.0
         armed = False
         entry_index = -1
 
-        upper_band, lower_band = self.calculate_bollinger_bands(period, deviation_lower, deviation_upper)
-        obv_ema_values = self.calculate_obv(obv_ema_period)
-
         for i in range(1, len(self.data)):
             current_price = self.data['close'].iloc[i]
             signals_met = 0
 
-            # Condition based on Bollinger Bands
-            if current_price < lower_band.iloc[i]:  # Buy signal condition
+            # Check for various buy signals...
+            if apo_values.iloc[i] > 0 and apo_values.iloc[i-1] <= 0:
+                signals_met += 1
+            if stoch_avg.iloc[i] <= 20:
+                signals_met += 1
+            if obv_ema_values.iloc[i] > obv_ema_values.iloc[i-1]:
+                signals_met += 1
+            if current_price < lower_band.iloc[i]:
                 signals_met += 1
 
-            if obv_ema_values.iloc[i] > obv_ema_values.iloc[i-1]:  # OBV condition for additional confirmation
-                signals_met += 1
-
-            # Buy condition based on signals met
-            if signals_met >= buy_signals_threshold and not position_open:
+            # Logic for opening position
+            if signals_met >= 4 and not position_open:
                 position_open = True
                 entry_price = current_price
                 highest_price_after_buy = current_price
                 entry_index = i
 
-            # Update highest price after buy for trailing stop loss
-            if position_open and current_price > highest_price_after_buy:
-                highest_price_after_buy = current_price
-                if current_price >= entry_price * (1 + arming_pct / 100):
-                    armed = True
-
-            # Sell conditions: Stop loss or Maximum holding time reached
+            # Logic for closing position
             if position_open:
                 holding_time = i - entry_index
                 max_holding_time_reached = holding_time >= (MAX_HOLD_TIME / self.data_frequency_in_minutes)
-                stop_loss_triggered = current_price <= highest_price_after_buy * (1 - stop_loss_pct / 100) and armed
+                if not armed and current_price >= entry_price * (1 + arming_pct / 100):
+                    armed = True
 
-                if max_holding_time_reached or stop_loss_triggered:
-                    total_profit += (current_price - entry_price) / entry_price
+                if armed and current_price <= highest_price_after_buy * (1 - stop_loss_pct / 100) or max_holding_time_reached:
+                    trade_return = (current_price - entry_price) / entry_price  # Calculate return of the trade
+                    capital_at_risk = current_balance * 0.10  # 10% of current capital at risk
+                    profit_from_trade = capital_at_risk * trade_return  # Profit from the 10% capital used
+                    current_balance += profit_from_trade  # Update current balance with profit from trade
                     position_open = False
                     armed = False
                     entry_index = -1
 
-        return total_profit
+        # Calculate the final percent gain over the entire period
+        total_percent_gain = (current_balance - initial_balance) / initial_balance * 100
+
+        return total_percent_gain
 
     def optimize(self):
         optimizer = BayesianOptimization(
@@ -144,18 +143,17 @@ class SignalOptimizer:
             print("No results to visualize.")
             return
 
-        # Convert top results to a DataFrame for easier plotting
         results_df = pd.DataFrame([res['params'] for res in self.top_results])
         results_df['profit'] = [res['target'] for res in self.top_results]
 
-        # Pairplot to explore the relationships between parameters and profit
         pairplot = sns.pairplot(results_df, diag_kind='kde', plot_kws={'alpha': 0.6, 's': 80, 'edgecolor': 'k'}, height=2)
-        pairplot.fig.suptitle('Parameter Relationships and Profit Distribution', y=1.02)  # Adjust title and its position
+        # Extract dataset name from the filepath and use it as the plot title
+        dataset_name = os.path.basename(self.filepath).split('.')[0]
+        pairplot.figure.suptitle(f'{dataset_name}_{START_DATE}_to_{END_DATE} - Parameter Relationships and Profit Distribution', y=1.02)
 
-        # Save the visualization
-        dataset_name = os.path.basename(self.filepath).split('.')[0]  # Assuming self.filepath exists in __init__
+        dataset_name = os.path.basename(self.filepath).split('.')[0]
         subfolder = os.path.join('indicator_optimizer_plots', dataset_name)
-        os.makedirs(subfolder, exist_ok=True)  # Create the directory if it doesn't exist
+        os.makedirs(subfolder, exist_ok=True)
 
         time_str = datetime.now().strftime('%Y%m%d_%H%M%S')
         filename = f"{dataset_name}_PairPlot_{START_DATE}_to_{END_DATE}_Date_{time_str}.png"
@@ -167,26 +165,28 @@ class SignalOptimizer:
 def parse_args():
     parser = argparse.ArgumentParser(description="Run Signal Optimizer")
     parser.add_argument("--filename", type=str, required=True, help="Input CSV file name")
-    parser.add_argument("--apo_fast_min", type=int, default=5)
-    parser.add_argument("--apo_fast_max", type=int, default=15)
-    parser.add_argument("--apo_slow_min", type=int, default=10)
-    parser.add_argument("--apo_slow_max", type=int, default=30)
-    parser.add_argument("--atr_ema_period_min", type=int, default=10)
-    parser.add_argument("--atr_ema_period_max", type=int, default=20)
-    parser.add_argument("--natr_period_min", type=int, default=14)
-    parser.add_argument("--natr_period_max", type=int, default=21)
-    parser.add_argument("--stoch_k_period_min", type=int, default=5)
-    parser.add_argument("--stoch_k_period_max", type=int, default=14)
-    parser.add_argument("--slow_k_period_min", type=int, default=3)
-    parser.add_argument("--slow_k_period_max", type=int, default=5)
-    parser.add_argument("--slow_d_period_min", type=int, default=3)
-    parser.add_argument("--slow_d_period_max", type=int, default=5)
-    parser.add_argument("--obv_ema_period_min", type=int, default=10)
-    parser.add_argument("--obv_ema_period_max", type=int, default=20)
-    parser.add_argument("--arming_pct_min", type=float, default=0.6)
-    parser.add_argument("--arming_pct_max", type=float, default=1.5)
-    parser.add_argument("--stop_loss_pct_min", type=float, default=0.1)
-    parser.add_argument("--stop_loss_pct_max", type=float, default=0.3)
+    parser.add_argument("--apo_fast_min", type=int, default=5, help="Minimum APO fast period")
+    parser.add_argument("--apo_fast_max", type=int, default=15, help="Maximum APO fast period")
+    parser.add_argument("--apo_slow_min", type=int, default=10, help="Minimum APO slow period")
+    parser.add_argument("--apo_slow_max", type=int, default=30, help="Maximum APO slow period")
+    parser.add_argument("--stoch_k_period_min", type=int, default=5, help="Minimum Stochastic K period")
+    parser.add_argument("--stoch_k_period_max", type=int, default=14, help="Maximum Stochastic K period")
+    parser.add_argument("--slow_k_period_min", type=int, default=3, help="Minimum Stochastic Slow K period")
+    parser.add_argument("--slow_k_period_max", type=int, default=5, help="Maximum Stochastic Slow K period")
+    parser.add_argument("--slow_d_period_min", type=int, default=3, help="Minimum Stochastic Slow D period")
+    parser.add_argument("--slow_d_period_max", type=int, default=5, help="Maximum Stochastic Slow D period")
+    parser.add_argument("--obv_ema_period_min", type=int, default=10, help="Minimum OBV EMA period")
+    parser.add_argument("--obv_ema_period_max", type=int, default=20, help="Maximum OBV EMA period")
+    parser.add_argument("--bb_period_min", type=int, default=5, help="Minimum Bollinger Bands period")
+    parser.add_argument("--bb_period_max", type=int, default=20, help="Maximum Bollinger Bands period")
+    parser.add_argument("--bb_dev_lower_min", type=float, default=1.5, help="Minimum Bollinger Bands lower deviation")
+    parser.add_argument("--bb_dev_lower_max", type=float, default=2.5, help="Maximum Bollinger Bands lower deviation")
+    parser.add_argument("--bb_dev_upper_min", type=float, default=1.5, help="Minimum Bollinger Bands upper deviation")
+    parser.add_argument("--bb_dev_upper_max", type=float, default=2.5, help="Maximum Bollinger Bands upper deviation")
+    parser.add_argument("--arming_pct_min", type=float, default=0.6, help="Minimum arming percentage for stop loss")
+    parser.add_argument("--arming_pct_max", type=float, default=1.5, help="Maximum arming percentage for stop loss")
+    parser.add_argument("--stop_loss_pct_min", type=float, default=0.1, help="Minimum stop loss percentage")
+    parser.add_argument("--stop_loss_pct_max", type=float, default=0.3, help="Maximum stop loss percentage")
     return parser.parse_args()
 
 
@@ -206,18 +206,15 @@ if __name__ == "__main__":
     PBOUNDS = {
         'apo_fast_period': (args.apo_fast_min, args.apo_fast_max),
         'apo_slow_period': (args.apo_slow_min, args.apo_slow_max),
-        'atr_ema_period': (args.atr_ema_period_min, args.atr_ema_period_max),
-        'natr_period': (args.natr_period_min, args.natr_period_max),  # Correctly included
         'stoch_k_period': (args.stoch_k_period_min, args.stoch_k_period_max),
         'slow_k_period': (args.slow_k_period_min, args.slow_k_period_max),
         'slow_d_period': (args.slow_d_period_min, args.slow_d_period_max),
         'obv_ema_period': (args.obv_ema_period_min, args.obv_ema_period_max),
+        'bb_period': (args.bb_period_min, args.bb_period_max),
+        'bb_dev_lower': (args.bb_dev_lower_min, args.bb_dev_lower_max),
+        'bb_dev_upper': (args.bb_dev_upper_min, args.bb_dev_upper_max),
         'arming_pct': (args.arming_pct_min, args.arming_pct_max),
-        'stop_loss_pct': (args.stop_loss_pct_min, args.stop_loss_pct_max),
-        'buy_signals_threshold': (3, 3),
+        'stop_loss_pct': (args.stop_loss_pct_min, args.stop_loss_pct_max)
     }
 
     run_optimization(FILEPATH, PBOUNDS)
-
-    pr.disable()
-    pr.print_stats(strip_dirs=True, sort='time').print_stats(50)
