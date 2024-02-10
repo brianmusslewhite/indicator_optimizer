@@ -10,10 +10,10 @@ from joblib import Parallel, delayed
 from tqdm import tqdm
 
 
-START_DATE = '2023-01-01'
+START_DATE = '2023-10-01'
 END_DATE = '2023-12-31'
-INIT_POINTS = 500
-N_ITER = 20
+INIT_POINTS = 2
+N_ITER = 2
 PAIR_POINTS = INIT_POINTS + N_ITER
 MAX_HOLD_TIME = 720  # 12 hours in minutes
 
@@ -23,6 +23,12 @@ class SignalOptimizer:
         self.PBOUNDS = pbounds
         self.filepath = filepath
         self.number_of_cores = number_of_cores
+        self.dataset_name = os.path.basename(self.filepath).split('.')[0]
+
+        self.plot_subfolder = os.path.join('indicator_optimizer_plots', self.dataset_name)
+        os.makedirs(self.plot_subfolder, exist_ok=True)
+        self.time_now = datetime.now().strftime('%Y%m%d_%H%M%S')
+
         processed_data_path = os.path.join('Processed Data', filepath)
 
         self.data = pd.read_csv(
@@ -154,7 +160,7 @@ class SignalOptimizer:
 
     def optimize(self):
         optimizer = BayesianOptimization(
-            f=None,  # Function evaluation is handled separately
+            f=None,
             pbounds=self.PBOUNDS,
             random_state=1,
             verbose=2
@@ -162,20 +168,19 @@ class SignalOptimizer:
         utility = UtilityFunction(kind="ucb", kappa=2.5, xi=0.0)
         init_points = [optimizer.suggest(utility) for _ in range(INIT_POINTS)]
 
-        # Adjust this loop in the optimize method
         results = Parallel(n_jobs=self.number_of_cores, backend="multiprocessing")(
-            delayed(self.evaluate_wrapper)(params) for params in tqdm(init_points, desc="Evaluating initial points")
+            delayed(self.evaluate_wrapper)(params) for params in tqdm(init_points, desc=f"Evaluating initial points for {self.dataset_name}")
         )
         for idx, performance in enumerate(results):
-            params = init_points[idx]  # Get parameters used for this iteration
+            params = init_points[idx]
             optimizer.register(params=params, target=performance)
 
         # Sequential Bayesian optimization
         with tqdm(total=N_ITER, desc="Optimizing points") as pbar:
             for _ in range(N_ITER):
                 next_params = optimizer.suggest(utility)
-                performance, _, _ = self.evaluate_performance(**next_params)  # Adjusted to unpack the tuple
-                optimizer.register(params=next_params, target=performance)  # Only pass the performance metric
+                performance, _, _ = self.evaluate_performance(**next_params)
+                optimizer.register(params=next_params, target=performance)
                 pbar.update(1)
 
         sorted_results = sorted(optimizer.res, key=lambda x: x['target'], reverse=True)
@@ -190,51 +195,33 @@ class SignalOptimizer:
 
         results_df = pd.DataFrame([res['params'] for res in self.top_results])
         results_df['profit'] = [res['target'] for res in self.top_results]
-
         filtered_results_df = results_df[results_df['profit'] != 0]
 
         if filtered_results_df.empty:
             print("No results to visualize after filtering out zero profits.")
             return
 
-        # Correctly generate the pairplot without creating a new figure
         pairplot = sns.pairplot(filtered_results_df, diag_kind='kde', plot_kws={'alpha': 0.6, 's': 80, 'edgecolor': 'k'}, height=2)
+        pairplot.figure.suptitle(f'{self.dataset_name}', size=12)
 
-        # Extract dataset name from the filepath
-        dataset_name = os.path.basename(self.filepath).split('.')[0]
-
-        # Set the figure title directly on the pairplot's figure object
-        pairplot.figure.suptitle(f'{dataset_name}', size=12)
-
-        # Prepare to save and show the plot
-        subfolder = os.path.join('indicator_optimizer_plots', dataset_name)
-        os.makedirs(subfolder, exist_ok=True)
-        time_str = datetime.now().strftime('%Y%m%d_%H%M%S')
-        filename = f"{dataset_name}_PairPlot_{START_DATE}_to_{END_DATE}_Date_{time_str}.png"
-        plt.savefig(os.path.join(subfolder, filename))
-
+        filename = f"{self.dataset_name}_PairPlot_{START_DATE}_to_{END_DATE}_Date_{self.time_now}.png"
+        plt.savefig(os.path.join(self.plot_subfolder, filename))
         plt.show()
 
     def plot_trades(self, buy_points, sell_points):
-        dataset_name = os.path.basename(self.filepath).split('.')[0]
         plt.figure(figsize=(14, 7))
         plt.plot(self.data['time'], self.data['close'], label='Close Price', alpha=0.5)
 
         plt.scatter(self.data.loc[self.data.index.isin(buy_points), 'time'], self.data.loc[self.data.index.isin(buy_points), 'close'], label='Buy', marker='^', color='green', alpha=1)
         plt.scatter(self.data.loc[self.data.index.isin(sell_points), 'time'], self.data.loc[self.data.index.isin(sell_points), 'close'], label='Sell', marker='v', color='red', alpha=1)
 
-        plt.title(f'{dataset_name}_{START_DATE}_to_{END_DATE}')
+        plt.title(f'{self.dataset_name}_{START_DATE}_to_{END_DATE}')
         plt.xlabel('Time')
         plt.ylabel('Price')
         plt.legend()
 
-        # Prepare to save and show the plot
-        subfolder = os.path.join('indicator_optimizer_plots', dataset_name)
-        os.makedirs(subfolder, exist_ok=True)
-        time_str = datetime.now().strftime('%Y%m%d_%H%M%S')
-        filename = f"{dataset_name}_BUYSELLResults_{START_DATE}_to_{END_DATE}_Date_{time_str}.png"
-        plt.savefig(os.path.join(subfolder, filename))
-
+        filename = f"{self.dataset_name}_BUYSELLResults_{START_DATE}_to_{END_DATE}_Date_{self.time_now}.png"
+        plt.savefig(os.path.join(self.plot_subfolder, filename))
         plt.show()
 
 
