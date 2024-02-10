@@ -2,7 +2,6 @@ import argparse
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-import multiprocessing
 import seaborn as sns
 import os
 from datetime import datetime
@@ -20,9 +19,10 @@ MAX_HOLD_TIME = 720  # 12 hours in minutes
 
 
 class SignalOptimizer:
-    def __init__(self, filepath, pbounds):
+    def __init__(self, filepath, pbounds, number_of_cores):
         self.PBOUNDS = pbounds
         self.filepath = filepath
+        self.number_of_cores = number_of_cores
         processed_data_path = os.path.join('Processed Data', filepath)
 
         self.data = pd.read_csv(
@@ -137,22 +137,15 @@ class SignalOptimizer:
             random_state=1,
             verbose=2
         )
-        # Generate initial points
         utility = UtilityFunction(kind="ucb", kappa=2.5, xi=0.0)
         init_points = [optimizer.suggest(utility) for _ in range(INIT_POINTS)]
 
-        # Get the number of CPU cores
-        num_cpu_cores = multiprocessing.cpu_count()
-        n_jobs = max(1, num_cpu_cores // 3)  # Ensure at least 1 job
-
         # Parallel evaluation of initial points with tqdm progress bar
-        with tqdm(total=INIT_POINTS, desc="Evaluating initial points") as pbar:
-            init_results = Parallel(n_jobs=n_jobs, backend="multiprocessing")(
-                delayed(self.evaluate_wrapper)(params, self) for params in init_points
-            )
-            for params, result in init_results:
-                optimizer.register(params=params, target=result)
-                pbar.update(1)
+        results = Parallel(n_jobs=self.number_of_cores, backend="multiprocessing")(
+            delayed(self.evaluate_wrapper)(params, self) for params in tqdm(init_points, desc="Evaluating initial points")
+        )
+        for params, result in results:
+            optimizer.register(params=params, target=result)
 
         # Sequential Bayesian optimization for further iterations with tqdm progress bar
         with tqdm(total=N_ITER, desc="Optimizing points") as pbar:
@@ -225,11 +218,12 @@ def parse_args():
     parser.add_argument("--arming_pct_max", type=float, default=1.5, help="Maximum arming percentage for stop loss")
     parser.add_argument("--stop_loss_pct_min", type=float, default=0.1, help="Minimum stop loss percentage")
     parser.add_argument("--stop_loss_pct_max", type=float, default=0.3, help="Maximum stop loss percentage")
+    parser.add_argument("--number_of_cores", type=int, default=1, help="Number of CPU cores to use")
     return parser.parse_args()
 
 
-def run_optimization(filename, pbounds):
-    optimizer = SignalOptimizer(filename, pbounds)
+def run_optimization(filename, pbounds, number_of_cores):
+    optimizer = SignalOptimizer(filename, pbounds, number_of_cores)
     top_results = optimizer.optimize()
 
     if top_results:
@@ -255,4 +249,4 @@ if __name__ == "__main__":
         'stop_loss_pct': (args.stop_loss_pct_min, args.stop_loss_pct_max)
     }
 
-    run_optimization(FILEPATH, PBOUNDS)
+    run_optimization(FILEPATH, PBOUNDS, args.number_of_cores)
