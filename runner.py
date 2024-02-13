@@ -2,46 +2,46 @@ import subprocess
 import multiprocessing
 
 configs = [
-    ("BCHXBT_1min_Kraken.csv", {
-        'apo_fast_min': 10, 'apo_fast_max': 15,  # Shorter for responsiveness
-        'apo_slow_min': 20, 'apo_slow_max': 30,  # Longer to capture trends
-        'stoch_k_period_min': 14, 'stoch_k_period_max': 21,  # Standard range for capturing momentum
-        'stoch_slow_k_period_min': 3, 'stoch_slow_k_period_max': 5,  # Smoothing the %K line
-        'stoch_slow_d_period_min': 3, 'stoch_slow_d_period_max': 5,  # Smoothing the %D line
-        'obv_ema_period_min': 15, 'obv_ema_period_max': 20,  # Adjusted for quicker volume trend detection
-        'bb_period_min': 15, 'bb_period_max': 20,  # Adjusted to capture medium-term volatility
-        'bb_dev_lower_min': 2, 'bb_dev_lower_max': 2.5,  # Narrower bands for trend confirmation
-        'bb_dev_upper_min': 2, 'bb_dev_upper_max': 2.5,  # Consistent with lower band for symmetry
-        'arming_pct_min': 0.5, 'arming_pct_max': 1.0,  # Tightened range for arming percentage
-        'stop_loss_pct_min': 0.05, 'stop_loss_pct_max': 0.2  # Tightened range to manage risk
+    ("BCHXBT_15min_Kraken.csv", {  # Assuming you'll adjust the filename to reflect 15-minute intervals if necessary
+        'macd_fast_min': 5, 'macd_fast_max': 12,  # Exploration range for MACD fast line
+        'macd_slow_min': 12, 'macd_slow_max': 26,  # Exploration range for MACD slow line
+        'macd_signal_min': 9, 'macd_signal_max': 18,  # Range for MACD signal line smoothing
+        'rsi_period_min': 10, 'rsi_period_max': 14,  # Standard short-range for RSI to capture quicker changes
+        'rsi_threshold_min': 30, 'rsi_threshold_max': 70,  # Classic overbought/oversold thresholds, adjust based on strategy preference
+        'obv_ema_period_min': 15, 'obv_ema_period_max': 20,  # Slightly adjusted for quicker volume trend detection on 15-min data
+        'bb_period_min': 15, 'bb_period_max': 20,  # Adjusted for medium-term trends on 15-min charts
+        'bb_dev_lower_min': 2, 'bb_dev_lower_max': 2.5,  # Narrower bands for tighter volatility capture
+        'bb_dev_upper_min': 2, 'bb_dev_upper_max': 2.5,  # Matching lower bands for consistency
+        'arming_pct_min': 0.5, 'arming_pct_max': 1.0,  # Tighter range for quicker stop activation
+        'stop_loss_pct_min': 0.05, 'stop_loss_pct_max': 0.2  # Tightened range to manage risk effectively
     }),
 
-    ("ETHXBT_1min_Kraken.csv", {
-        'apo_fast_min': 10, 'apo_fast_max': 15,  # Shorter for responsiveness
-        'apo_slow_min': 20, 'apo_slow_max': 30,  # Longer to capture trends
-        'stoch_k_period_min': 14, 'stoch_k_period_max': 21,  # Standard range for capturing momentum
-        'stoch_slow_k_period_min': 3, 'stoch_slow_k_period_max': 5,  # Smoothing the %K line
-        'stoch_slow_d_period_min': 3, 'stoch_slow_d_period_max': 5,  # Smoothing the %D line
-        'obv_ema_period_min': 15, 'obv_ema_period_max': 20,  # Adjusted for quicker volume trend detection
-        'bb_period_min': 15, 'bb_period_max': 20,  # Adjusted to capture medium-term volatility
-        'bb_dev_lower_min': 2, 'bb_dev_lower_max': 2.5,  # Narrower bands for trend confirmation
-        'bb_dev_upper_min': 2, 'bb_dev_upper_max': 2.5,  # Consistent with lower band for symmetry
-        'arming_pct_min': 0.5, 'arming_pct_max': 1.0,  # Tightened range for arming percentage
-        'stop_loss_pct_min': 0.05, 'stop_loss_pct_max': 0.2  # Tightened range to manage risk
+    ("ETHXBT_15min_Kraken.csv", {
+        'macd_fast_min': 5, 'macd_fast_max': 12,  # Exploration range for MACD fast line
+        'macd_slow_min': 12, 'macd_slow_max': 26,  # Exploration range for MACD slow line
+        'macd_signal_min': 9, 'macd_signal_max': 18,  # Range for MACD signal line smoothing
+        'rsi_period_min': 10, 'rsi_period_max': 14,  # Standard short-range for RSI to capture quicker changes
+        'rsi_threshold_min': 30, 'rsi_threshold_max': 70,  # Classic overbought/oversold thresholds, adjust based on strategy preference
+        'obv_ema_period_min': 15, 'obv_ema_period_max': 20,  # Slightly adjusted for quicker volume trend detection on 15-min data
+        'bb_period_min': 15, 'bb_period_max': 20,  # Adjusted for medium-term trends on 15-min charts
+        'bb_dev_lower_min': 2, 'bb_dev_lower_max': 2.5,  # Narrower bands for tighter volatility capture
+        'bb_dev_upper_min': 2, 'bb_dev_upper_max': 2.5,  # Matching lower bands for consistency
+        'arming_pct_min': 0.5, 'arming_pct_max': 1.0,  # Tighter range for quicker stop activation
+        'stop_loss_pct_min': 0.05, 'stop_loss_pct_max': 0.2  # Tightened range to manage risk effectively
     }),
 
-    ("MATICXBT_1min_Kraken.csv", {
-        'apo_fast_min': 10, 'apo_fast_max': 15,  # Shorter for responsiveness
-        'apo_slow_min': 20, 'apo_slow_max': 30,  # Longer to capture trends
-        'stoch_k_period_min': 14, 'stoch_k_period_max': 21,  # Standard range for capturing momentum
-        'stoch_slow_k_period_min': 3, 'stoch_slow_k_period_max': 5,  # Smoothing the %K line
-        'stoch_slow_d_period_min': 3, 'stoch_slow_d_period_max': 5,  # Smoothing the %D line
-        'obv_ema_period_min': 15, 'obv_ema_period_max': 20,  # Adjusted for quicker volume trend detection
-        'bb_period_min': 15, 'bb_period_max': 20,  # Adjusted to capture medium-term volatility
-        'bb_dev_lower_min': 2, 'bb_dev_lower_max': 2.5,  # Narrower bands for trend confirmation
-        'bb_dev_upper_min': 2, 'bb_dev_upper_max': 2.5,  # Consistent with lower band for symmetry
-        'arming_pct_min': 0.5, 'arming_pct_max': 1.0,  # Tightened range for arming percentage
-        'stop_loss_pct_min': 0.05, 'stop_loss_pct_max': 0.2  # Tightened range to manage risk
+    ("MATICXBT_15min_Kraken.csv", {
+        'macd_fast_min': 5, 'macd_fast_max': 12,  # Exploration range for MACD fast line
+        'macd_slow_min': 12, 'macd_slow_max': 26,  # Exploration range for MACD slow line
+        'macd_signal_min': 9, 'macd_signal_max': 18,  # Range for MACD signal line smoothing
+        'rsi_period_min': 10, 'rsi_period_max': 14,  # Standard short-range for RSI to capture quicker changes
+        'rsi_threshold_min': 30, 'rsi_threshold_max': 70,  # Classic overbought/oversold thresholds, adjust based on strategy preference
+        'obv_ema_period_min': 15, 'obv_ema_period_max': 20,  # Slightly adjusted for quicker volume trend detection on 15-min data
+        'bb_period_min': 15, 'bb_period_max': 20,  # Adjusted for medium-term trends on 15-min charts
+        'bb_dev_lower_min': 2, 'bb_dev_lower_max': 2.5,  # Narrower bands for tighter volatility capture
+        'bb_dev_upper_min': 2, 'bb_dev_upper_max': 2.5,  # Matching lower bands for consistency
+        'arming_pct_min': 0.5, 'arming_pct_max': 1.0,  # Tighter range for quicker stop activation
+        'stop_loss_pct_min': 0.05, 'stop_loss_pct_max': 0.2  # Tightened range to manage risk effectively
     }),
 ]
 
@@ -51,18 +51,18 @@ n_jobs = max(1, num_cpu_cores // len(configs))
 
 for filename, pbounds in configs:
     command = ' '.join([
-        'python3', 'indicator_optimizer_APO_BB_STOCH_OBV.py',
+        'python', 'IO_MACD_RSI_BB_OBV.py',
         '--filename', filename,
-        '--apo_fast_min', str(pbounds['apo_fast_min']),
-        '--apo_fast_max', str(pbounds['apo_fast_max']),
-        '--apo_slow_min', str(pbounds['apo_slow_min']),
-        '--apo_slow_max', str(pbounds['apo_slow_max']),
-        '--stoch_k_period_min', str(pbounds['stoch_k_period_min']),
-        '--stoch_k_period_max', str(pbounds['stoch_k_period_max']),
-        '--stoch_slow_k_period_min', str(pbounds['stoch_slow_k_period_min']),
-        '--stoch_slow_k_period_max', str(pbounds['stoch_slow_k_period_max']),
-        '--stoch_slow_d_period_min', str(pbounds['stoch_slow_d_period_min']),
-        '--stoch_slow_d_period_max', str(pbounds['stoch_slow_d_period_max']),
+        '--macd_fast_min', str(pbounds['macd_fast_min']),
+        '--macd_fast_max', str(pbounds['macd_fast_max']),
+        '--macd_slow_min', str(pbounds['macd_slow_min']),
+        '--macd_slow_max', str(pbounds['macd_slow_max']),
+        '--macd_signal_min', str(pbounds['macd_signal_min']),
+        '--macd_signal_max', str(pbounds['macd_signal_max']),
+        '--rsi_period_min', str(pbounds['rsi_period_min']),
+        '--rsi_period_max', str(pbounds['rsi_period_max']),
+        '--rsi_threshold_min', str(pbounds['rsi_threshold_min']),
+        '--rsi_threshold_max', str(pbounds['rsi_threshold_max']),
         '--obv_ema_period_min', str(pbounds['obv_ema_period_min']),
         '--obv_ema_period_max', str(pbounds['obv_ema_period_max']),
         '--bb_period_min', str(pbounds['bb_period_min']),
@@ -79,4 +79,5 @@ for filename, pbounds in configs:
     ])
 
     # Open a new terminal window for each optimization run
-    subprocess.Popen(f'gnome-terminal -- bash -c "{command}; exec bash"', shell=True)
+    # subprocess.Popen(f'gnome-terminal -- bash -c "{command}; exec bash"', shell=True)
+    subprocess.Popen(f'cmd /c start cmd /k "{command}"', shell=True)

@@ -20,8 +20,8 @@ def process_trading_history(file_paths):
             df = df.set_index('timestamp')
 
             # Resample and calculate OHLCV
-            ohlcv = df['price'].resample('1min').ohlc()
-            volume = df['volume'].resample('1min').sum()
+            ohlcv = df['price'].resample('15min').ohlc()
+            volume = df['volume'].resample('15min').sum()
             ohlcv.ffill(inplace=True)
 
             # Adjust the DataFrame to match expected column names
@@ -37,7 +37,7 @@ def process_trading_history(file_paths):
 
             # Construct output file path
             base_name = os.path.basename(file_path)
-            output_path = os.path.join(output_folder, os.path.splitext(base_name)[0] + "_1min_Kraken.csv")
+            output_path = os.path.join(output_folder, os.path.splitext(base_name)[0] + "_15min_Kraken.csv")
 
             # Write to a new CSV
             ohlcv.to_csv(output_path, index=False)
@@ -48,14 +48,14 @@ def process_trading_history(file_paths):
 
 
 file_paths = [
-    '/home/p1g3/Downloads/Kraken_Trading_History/BCHXBT.csv',
-    '/home/p1g3/Downloads/Kraken_Trading_History/ETHXBT.csv',
-    '/home/p1g3/Downloads/Kraken_Trading_History/MATICXBT.csv',
-    '/home/p1g3/Downloads/Kraken_Trading_History/LTCXBT.csv',
-    '/home/p1g3/Downloads/Kraken_Trading_History/XDGXBT.csv',
-    '/home/p1g3/Downloads/Kraken_Trading_History/XMRXBT.csv',
-    '/home/p1g3/Downloads/Kraken_Trading_History/XLMXBT.csv',
-    '/home/p1g3/Downloads/Kraken_Trading_History/XRPXBT.csv'
+    r'C:\Users\P70\Documents\indicator_optimizer\Kraken_Trading_History\BCHXBT.csv',
+    r'C:\Users\P70\Documents\indicator_optimizer\Kraken_Trading_History\ETHXBT.csv',
+    r'C:\Users\P70\Documents\indicator_optimizer\Kraken_Trading_History\MATICXBT.csv',
+    r'C:\Users\P70\Documents\indicator_optimizer\Kraken_Trading_History\LTCXBT.csv',
+    r'C:\Users\P70\Documents\indicator_optimizer\Kraken_Trading_History\XDGXBT.csv',
+    r'C:\Users\P70\Documents\indicator_optimizer\Kraken_Trading_History\XMRXBT.csv',
+    r'C:\Users\P70\Documents\indicator_optimizer\Kraken_Trading_History\XLMXBT.csv',
+    r'C:\Users\P70\Documents\indicator_optimizer\Kraken_Trading_History\XRPXBT.csv'
 ]
 
 process_trading_history(file_paths)
