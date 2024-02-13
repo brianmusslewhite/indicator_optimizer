@@ -3,19 +3,29 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
+import signal
 import os
 from datetime import datetime
 from bayes_opt import BayesianOptimization, UtilityFunction
 from joblib import Parallel, delayed
+from math import ceil
 from tqdm import tqdm
 
 
-START_DATE = '2023-07-01'
+START_DATE = '2023-11-30'
 END_DATE = '2023-12-31'
-INIT_POINTS = 10000
+INIT_POINTS = 1000
 N_ITER = 1000
 PAIR_POINTS = 500
 MAX_HOLD_TIME = 16  # 12 hours in minutes
+
+INTERRUPTED = False
+
+def signal_handler(signum, frame):
+    global INTERRUPTED
+    INTERRUPTED = True
+    print("Signal received, stopping optimization...")
+    raise KeyboardInterrupt
 
 
 class SignalOptimizer:
@@ -164,6 +174,8 @@ class SignalOptimizer:
         return performance
 
     def optimize(self):
+        global INTERRUPTED
+        signal.signal(signal.SIGINT, signal_handler)
         optimizer = BayesianOptimization(
             f=None,
             pbounds=self.PBOUNDS,
@@ -173,25 +185,47 @@ class SignalOptimizer:
         utility = UtilityFunction(kind="ucb", kappa=2.5, xi=0.0)
         init_points = [optimizer.suggest(utility) for _ in range(INIT_POINTS)]
 
-        results = Parallel(n_jobs=self.number_of_cores, backend="multiprocessing")(
-            delayed(self.evaluate_wrapper)(params) for params in tqdm(init_points, desc=f"Evaluating initial points {self.dataset_name}")
-        )
-        for idx, performance in enumerate(results):
-            params = init_points[idx]
-            optimizer.register(params=params, target=performance)
+        batch_size = self.number_of_cores
+        num_batches = ceil(len(init_points) / batch_size)
 
-        # Sequential Bayesian optimization
-        with tqdm(total=N_ITER, desc="Optimizing points") as pbar:
-            for _ in range(N_ITER):
-                next_params = optimizer.suggest(utility)
-                performance, _, _ = self.evaluate_performance(**next_params)
-                print(f"Performance: {performance}")
-                optimizer.register(params=next_params, target=performance)
-                pbar.update(1)
+        try:
+            for batch_idx in tqdm(range(num_batches), desc="Processing batches"):
+                if INTERRUPTED:
+                    print("Ctrl+C, breaking out of initial processing.")
+                    break  # Exit the loop if an interruption was signaled
+                start_idx = batch_idx * batch_size
+                end_idx = min(start_idx + batch_size, len(init_points))
+                batch_points = init_points[start_idx:end_idx]
 
+                # Process each batch in parallel
+                batch_results = Parallel(n_jobs=self.number_of_cores, backend="multiprocessing")(
+                    delayed(self.evaluate_wrapper)(params) for params in batch_points
+                )
+
+                # Register the results of each batch
+                for idx, performance in enumerate(batch_results):
+                    optimizer.register(params=batch_points[idx], target=performance)
+
+        except KeyboardInterrupt:
+            print("\nOptimization interrupted by user. Proceeding with results obtained so far.")
+        try:
+            # Sequential Bayesian optimization
+            with tqdm(total=N_ITER, desc="Optimizing points") as pbar:
+                for _ in range(N_ITER):
+                    if INTERRUPTED:
+                        print("Ctrl+C, breaking out of initial processing.")
+                        break  # Exit the loop if an interruption was signaled
+                    next_params = optimizer.suggest(utility)
+                    performance, _, _ = self.evaluate_performance(**next_params)
+                    optimizer.register(params=next_params, target=performance)
+                    pbar.update(1)
+
+        except KeyboardInterrupt:
+            print("\nOptimization interrupted by user. Proceeding with results obtained so far.")
+
+        # Process and return the results obtained so far, regardless of whether there was an interruption
         sorted_results = sorted(optimizer.res, key=lambda x: x['target'], reverse=True)
         self.top_results = sorted_results[:PAIR_POINTS] if len(sorted_results) >= PAIR_POINTS else sorted_results
-
         return self.top_results
 
     def visualize_top_results(self):
