@@ -1,5 +1,12 @@
 import subprocess
 import multiprocessing
+import platform
+
+os_name = platform.system()
+if os_name == "Linux" or os_name == "Darwin":
+    python_version = 'python3'
+elif os_name == "Windows":
+    python_version = 'python'
 
 configs = [
     ("BCHXBT_15min_Kraken.csv", {  # Assuming you'll adjust the filename to reflect 15-minute intervals if necessary
@@ -51,7 +58,7 @@ n_jobs = max(1, num_cpu_cores // len(configs))
 
 for filename, pbounds in configs:
     command = ' '.join([
-        'python', 'IO_MACD_RSI_BB_OBV.py',
+        python_version, 'IO_MACD_RSI_BB_OBV.py',
         '--filename', filename,
         '--macd_fast_min', str(pbounds['macd_fast_min']),
         '--macd_fast_max', str(pbounds['macd_fast_max']),
@@ -78,6 +85,9 @@ for filename, pbounds in configs:
         '--number_of_cores', str(n_jobs),
     ])
 
-    # Open a new terminal window for each optimization run
-    # subprocess.Popen(f'gnome-terminal -- bash -c "{command}; exec bash"', shell=True)
-    subprocess.Popen(f'cmd /c start cmd /k "{command}"', shell=True)
+    if os_name == "Linux" or os_name == "Darwin":
+        subprocess.Popen(f'gnome-terminal -- bash -c "{command}; exec bash"', shell=True)
+    elif os_name == "Windows":
+        subprocess.Popen(f'cmd /c start cmd /k "{command}"', shell=True)
+    else:
+        print(f"Unsupported operating system: {os_name}")
