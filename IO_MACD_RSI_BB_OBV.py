@@ -10,11 +10,11 @@ from joblib import Parallel, delayed
 from tqdm import tqdm
 
 
-START_DATE = '2023-06-01'
+START_DATE = '2023-07-01'
 END_DATE = '2023-12-31'
-INIT_POINTS = 500
-N_ITER = 5
-PAIR_POINTS = INIT_POINTS + N_ITER
+INIT_POINTS = 10000
+N_ITER = 1000
+PAIR_POINTS = 500
 MAX_HOLD_TIME = 16  # 12 hours in minutes
 
 
@@ -91,7 +91,7 @@ class SignalOptimizer:
         obv_ema = pd.Series(obv).ewm(span=ema_period, adjust=False).mean()
         return obv_ema
 
-    def evaluate_performance(self, macd_fast_period, macd_slow_period, macd_signal_period, rsi_period, rsi_threshold, obv_ema_period, bb_period, bb_dev_lower, bb_dev_upper, arming_pct, stop_loss_pct):
+    def evaluate_performance(self, macd_fast_period, macd_slow_period, macd_signal_period, macd_stick, rsi_period, rsi_threshold, obv_ema_period, bb_period, bb_dev_lower, bb_dev_upper, arming_pct, stop_loss_pct):
         upper_band, lower_band = self.calculate_bollinger_bands(bb_period, bb_dev_lower, bb_dev_upper)
         macd, signal_line = self.calculate_macd(macd_fast_period, macd_slow_period, macd_signal_period)
         rsi, _ = self.calculate_rsi(rsi_period, rsi_threshold)
@@ -108,21 +108,28 @@ class SignalOptimizer:
         buy_points = []
         sell_points = []
 
+        macd_signal_persistence = 0
+        macd_stick = int(macd_stick)
+
         for i in range(1, len(self.data)):
             current_price = self.data['close'].iloc[i]
             signals_met = 0
 
             if macd.iloc[i] > signal_line.iloc[i] and macd.iloc[i-1] <= signal_line.iloc[i-1]:
                 signals_met += 1
+                macd_signal_persistence = macd_stick
+            elif macd_signal_persistence > 0:
+                signals_met += 1
+                macd_signal_persistence -= 1
             if rsi.iloc[i] < rsi_threshold:
                 signals_met += 1
             if obv_ema_values.iloc[i] > obv_ema_values.iloc[i-1]:
                 signals_met += 1
-            if current_price < lower_band[i]:
+            if current_price < lower_band.iloc[i]:
                 signals_met += 1
 
             # Logic for opening position
-            if signals_met >= 4 and not position_open:
+            if signals_met >= 3 and not position_open:
                 buy_points.append(self.data.index[i])
                 position_open = True
                 entry_price = current_price
@@ -148,7 +155,7 @@ class SignalOptimizer:
 
         # Calculate the final percent gain over the entire period
         total_percent_gain = (current_balance - initial_balance) / initial_balance * 100
-
+        # print(signal_counters)
         return total_percent_gain, buy_points, sell_points
 
     def evaluate_wrapper(self, params):
@@ -167,7 +174,7 @@ class SignalOptimizer:
         init_points = [optimizer.suggest(utility) for _ in range(INIT_POINTS)]
 
         results = Parallel(n_jobs=self.number_of_cores, backend="multiprocessing")(
-            delayed(self.evaluate_wrapper)(params) for params in tqdm(init_points, desc=f"Evaluating initial points for {self.dataset_name}")
+            delayed(self.evaluate_wrapper)(params) for params in tqdm(init_points, desc=f"Evaluating initial points {self.dataset_name}")
         )
         for idx, performance in enumerate(results):
             params = init_points[idx]
@@ -178,6 +185,7 @@ class SignalOptimizer:
             for _ in range(N_ITER):
                 next_params = optimizer.suggest(utility)
                 performance, _, _ = self.evaluate_performance(**next_params)
+                print(f"Performance: {performance}")
                 optimizer.register(params=next_params, target=performance)
                 pbar.update(1)
 
@@ -232,6 +240,8 @@ def parse_args():
     parser.add_argument("--macd_slow_max", type=int, default=26, help="Maximum MACD slow period")
     parser.add_argument("--macd_signal_min", type=int, default=9, help="Minimum MACD signal period")
     parser.add_argument("--macd_signal_max", type=int, default=18, help="Maximum MACD signal period")
+    parser.add_argument("--macd_stick_min", type=int, default=1, help="Minimum MACD periods to stick")
+    parser.add_argument("--macd_stick_max", type=int, default=4, help="Maximum MACD periods to stick")
     parser.add_argument("--rsi_period_min", type=int, default=10, help="Minimum RSI period")
     parser.add_argument("--rsi_period_max", type=int, default=30, help="Maximum RSI period")
     parser.add_argument("--rsi_threshold_min", type=int, default=20, help="Minimum RSI threshold for oversold condition")
@@ -274,6 +284,7 @@ if __name__ == "__main__":
         'macd_fast_period': (args.macd_fast_min, args.macd_fast_max),
         'macd_slow_period': (args.macd_slow_min, args.macd_slow_max),
         'macd_signal_period': (args.macd_signal_min, args.macd_signal_max),
+        'macd_stick': (args.macd_stick_min, args.macd_stick_max),
         'rsi_period': (args.rsi_period_min, args.rsi_period_max),
         'rsi_threshold': (args.rsi_threshold_min, args.rsi_threshold_max),
         'obv_ema_period': (args.obv_ema_period_min, args.obv_ema_period_max),
