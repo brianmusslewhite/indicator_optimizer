@@ -12,9 +12,9 @@ from tqdm import tqdm
 
 START_DATE = '2021-01-01'
 END_DATE = '2023-12-31'
-INIT_POINTS = 400
-N_ITER = 40
-PAIR_POINTS = INIT_POINTS + N_ITER
+INIT_POINTS = 20
+N_ITER = 2
+PAIR_POINTS = INIT_POINTS
 MAX_HOLD_TIME = 720  # 12 hours in minutes
 
 
@@ -92,7 +92,7 @@ class SignalOptimizer:
         obv_ema = pd.Series(obv).ewm(span=ema_period, adjust=False).mean()
         return obv_ema
 
-    def evaluate_performance(self, apo_fast_period, apo_slow_period, stoch_k_period, stoch_slow_k_period, stoch_slow_d_period, obv_ema_period, bb_period, bb_dev_lower, bb_dev_upper, arming_pct, stop_loss_pct):
+    def evaluate_performance(self, apo_fast_period, apo_slow_period, stoch_k_period, stoch_slow_k_period, stoch_slow_d_period, stoch_threshold, obv_ema_period, bb_period, bb_dev_lower, bb_dev_upper, arming_pct, stop_loss_pct):
         upper_band, lower_band = self.calculate_bollinger_bands(bb_period, bb_dev_lower, bb_dev_upper)
         apo_values = self.calculate_apo(apo_fast_period, apo_slow_period)
         stoch_avg = self.calculate_stochastic_oscillator(stoch_k_period, stoch_slow_k_period, stoch_slow_d_period)
@@ -116,7 +116,7 @@ class SignalOptimizer:
             # Check for buy signals
             if apo_values.iloc[i] > 0 and apo_values.iloc[i-1] <= 0:
                 signals_met += 1
-            if stoch_avg.iloc[i] <= 20:
+            if stoch_avg.iloc[i] <= stoch_threshold:
                 signals_met += 1
             if obv_ema_values.iloc[i] > obv_ema_values.iloc[i-1]:
                 signals_met += 1
@@ -169,7 +169,7 @@ class SignalOptimizer:
         init_points = [optimizer.suggest(utility) for _ in range(INIT_POINTS)]
 
         results = Parallel(n_jobs=self.number_of_cores, backend="multiprocessing")(
-            delayed(self.evaluate_wrapper)(params) for params in tqdm(init_points, desc=f"Evaluating initial points for {self.dataset_name}")
+            delayed(self.evaluate_wrapper)(params) for params in tqdm(init_points, desc=f"Evaluating initial points {self.dataset_name}")
         )
         for idx, performance in enumerate(results):
             params = init_points[idx]
@@ -238,6 +238,8 @@ def parse_args():
     parser.add_argument("--stoch_slow_k_period_max", type=int, default=5, help="Maximum Stochastic Slow K period")
     parser.add_argument("--stoch_slow_d_period_min", type=int, default=3, help="Minimum Stochastic Slow D period")
     parser.add_argument("--stoch_slow_d_period_max", type=int, default=5, help="Maximum Stochastic Slow D period")
+    parser.add_argument("--stoch_threshold_min", type=int, default=80, help="Min stoch threshold for buy signal")
+    parser.add_argument("--stoch_threshold_max", type=int, default=80, help="Max stoch threshold for buy signal")
     parser.add_argument("--obv_ema_period_min", type=int, default=10, help="Minimum OBV EMA period")
     parser.add_argument("--obv_ema_period_max", type=int, default=20, help="Maximum OBV EMA period")
     parser.add_argument("--bb_period_min", type=int, default=5, help="Minimum Bollinger Bands period")
@@ -278,6 +280,7 @@ if __name__ == "__main__":
         'stoch_k_period': (args.stoch_k_period_min, args.stoch_k_period_max),
         'stoch_slow_k_period': (args.stoch_slow_k_period_min, args.stoch_slow_k_period_max),
         'stoch_slow_d_period': (args.stoch_slow_d_period_min, args.stoch_slow_d_period_max),
+        'stoch_threshold': (args.stoch_threshold_min, args.stoch_threshold_max),
         'obv_ema_period': (args.obv_ema_period_min, args.obv_ema_period_max),
         'bb_period': (args.bb_period_min, args.bb_period_max),
         'bb_dev_lower': (args.bb_dev_lower_min, args.bb_dev_lower_max),
