@@ -12,14 +12,15 @@ from math import ceil
 from tqdm import tqdm
 
 
-START_DATE = '2023-11-30'
+START_DATE = '2023-6-1'
 END_DATE = '2023-12-31'
 INIT_POINTS = 1000
-N_ITER = 1000
-PAIR_POINTS = 500
-MAX_HOLD_TIME = 16  # 12 hours in minutes
+N_ITER = 20
+PAIR_POINTS = 1000
+MAX_HOLD_TIME = 144  # 12 hours in minutes
 
 INTERRUPTED = False
+
 
 def signal_handler(signum, frame):
     global INTERRUPTED
@@ -64,7 +65,7 @@ class SignalOptimizer:
 
         self.data.ffill(inplace=True)
         self.data.reset_index(inplace=True)
-        self.data_frequency_in_minutes = 15
+        self.data_frequency_in_minutes = 5
         self.best_buy_points = []
         self.best_sell_points = []
         self.best_performance = float('-inf')

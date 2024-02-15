@@ -9,22 +9,22 @@ elif os_name == "Windows":
     python_version = 'python'
 
 configs = [
-    ("BCHXBT_15min_Kraken.csv", {  # Assuming you'll adjust the filename to reflect 15-minute intervals if necessary
-        'macd_fast_min': 8, 'macd_fast_max': 12,  # Exploration range for MACD fast line
-        'macd_slow_min': 21, 'macd_slow_max': 26,  # Exploration range for MACD slow line
+    ("BCHXBT_5min_Kraken.csv", {  # Assuming you'll adjust the filename to reflect 15-minute intervals if necessary
+        'macd_fast_min': 2, 'macd_fast_max': 8,  # Exploration range for MACD fast line
+        'macd_slow_min': 9, 'macd_slow_max': 24,  # Exploration range for MACD slow line
         'macd_signal_min': 5, 'macd_signal_max': 9,  # Range for MACD signal line smoothing
         'macd_stick_min': 1, 'macd_stick_max': 1,  # Range for how long the macd signal sticks
-        'rsi_period_min': 10, 'rsi_period_max': 20,  # Standard short-range for RSI to capture quicker changes
-        'rsi_threshold_min': 20, 'rsi_threshold_max': 80,  # Classic overbought/oversold thresholds, adjust based on strategy preference
-        'obv_ema_period_min': 10, 'obv_ema_period_max': 30,  # Slightly adjusted for quicker volume trend detection on 15-min data
-        'bb_period_min': 12, 'bb_period_max': 20,  # Adjusted for medium-term trends on 15-min charts
-        'bb_dev_lower_min': 1.8, 'bb_dev_lower_max': 2.2,  # Narrower bands for tighter volatility capture
-        'bb_dev_upper_min': 1.8, 'bb_dev_upper_max': 2.2,  # Matching lower bands for consistency
+        'rsi_period_min': 10, 'rsi_period_max': 17,  # Standard short-range for RSI to capture quicker changes
+        'rsi_threshold_min': 30, 'rsi_threshold_max': 60,  # Classic overbought/oversold thresholds, adjust based on strategy preference
+        'obv_ema_period_min': 10, 'obv_ema_period_max': 25,  # Slightly adjusted for quicker volume trend detection on 15-min data
+        'bb_period_min': 14, 'bb_period_max': 19,  # Adjusted for medium-term trends on 15-min charts
+        'bb_dev_lower_min': 1.2, 'bb_dev_lower_max': 2,  # Narrower bands for tighter volatility capture
+        'bb_dev_upper_min': 1.2, 'bb_dev_upper_max': 2,  # Matching lower bands for consistency
         'arming_pct_min': 0.3, 'arming_pct_max': 1.0,  # Tighter range for quicker stop activation
         'stop_loss_pct_min': 0.05, 'stop_loss_pct_max': 0.2  # Tightened range to manage risk effectively
     }),
 
-    # ("ETHXBT_15min_Kraken.csv", {
+    # ("ETHXBT_5min_Kraken.csv", {
     #     'macd_fast_min': 5, 'macd_fast_max': 12,  # Exploration range for MACD fast line
     #     'macd_slow_min': 12, 'macd_slow_max': 26,  # Exploration range for MACD slow line
     #     'macd_signal_min': 9, 'macd_signal_max': 18,  # Range for MACD signal line smoothing
@@ -38,7 +38,7 @@ configs = [
     #     'stop_loss_pct_min': 0.05, 'stop_loss_pct_max': 0.2  # Tightened range to manage risk effectively
     # }),
 
-    # ("MATICXBT_15min_Kraken.csv", {
+    # ("MATICXBT_5min_Kraken.csv", {
     #     'macd_fast_min': 5, 'macd_fast_max': 12,  # Exploration range for MACD fast line
     #     'macd_slow_min': 12, 'macd_slow_max': 26,  # Exploration range for MACD slow line
     #     'macd_signal_min': 9, 'macd_signal_max': 18,  # Range for MACD signal line smoothing
