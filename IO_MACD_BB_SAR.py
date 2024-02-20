@@ -12,12 +12,12 @@ from math import ceil
 from tqdm import tqdm
 
 
-START_DATE = '2023-6-1'
+START_DATE = '2023-11-30'
 END_DATE = '2023-12-31'
 INIT_POINTS = 500
-N_ITER = 2000
-PAIR_POINTS = 1000
-MAX_HOLD_TIME = 144  # 12 hours in minutes
+N_ITER = 1000
+PAIR_POINTS = INIT_POINTS + N_ITER
+MAX_HOLD_TIME = 48  # 12 hours in minutes
 
 INTERRUPTED = False
 
@@ -65,7 +65,7 @@ class SignalOptimizer:
 
         self.data.ffill(inplace=True)
         self.data.reset_index(inplace=True)
-        self.data_frequency_in_minutes = 5
+        self.data_frequency_in_minutes = 15
         self.best_buy_points = []
         self.best_sell_points = []
         self.best_performance = float('-inf')
@@ -87,26 +87,46 @@ class SignalOptimizer:
         signal_line = macd.ewm(span=signal_period, adjust=False).mean()
         return macd, signal_line
 
-    def calculate_rsi(self, rsi_period, rsi_threshold):
-        rsi_period = int(rsi_period)
-        delta = self.data['close'].diff(1)
-        gain = (delta.where(delta > 0, 0)).rolling(window=rsi_period).mean()
-        loss = (-delta.where(delta < 0, 0)).rolling(window=rsi_period).mean()
-        rs = gain / loss
-        rsi = 100 - (100 / (1 + rs))
-        return rsi, rsi_threshold
+    def calculate_parabolic_sar(self, af_init, af_max):
+        high = self.data['high'].values.astype('float32')
+        low = self.data['low'].values.astype('float32')
+        close = self.data['close'].values.astype('float32')
 
-    def calculate_obv(self, ema_period):
-        ema_period = int(ema_period)
-        obv = np.where(self.data['close'] > self.data['close'].shift(), self.data['volume'], -self.data['volume']).cumsum()
-        obv_ema = pd.Series(obv).ewm(span=ema_period, adjust=False).mean()
-        return obv_ema
+        sar = np.full(close.shape, np.nan, dtype='float32')
+        sar[0] = close[0]
 
-    def evaluate_performance(self, macd_fast_period, macd_slow_period, macd_signal_period, macd_stick, rsi_period, rsi_threshold, obv_ema_period, bb_period, bb_dev_lower, bb_dev_upper, arming_pct, stop_loss_pct):
+        uptrend = True
+        af = af_init
+        ep = high[0]
+
+        for i in range(1, len(close)):
+            if uptrend:
+                sar[i] = sar[i - 1] + af * (ep - sar[i - 1])
+                if high[i] > ep:
+                    ep = high[i]
+                    af = min(af + af_init, af_max)
+                if low[i] < sar[i]:
+                    uptrend = False
+                    af = af_init
+                    ep = low[i]
+                    sar[i] = max(high[i - 1], high[i])
+            else:
+                sar[i] = sar[i - 1] + af * (ep - sar[i - 1])
+                if low[i] < ep:
+                    ep = low[i]
+                    af = min(af + af_init, af_max)
+                if high[i] > sar[i]:
+                    uptrend = True
+                    af = af_init
+                    ep = high[i]
+                    sar[i] = min(low[i - 1], low[i])
+
+        return pd.Series(sar, index=self.data.index)
+
+    def evaluate_performance(self, macd_fast_period, macd_slow_period, macd_signal_period, bb_period, bb_dev_lower, bb_dev_upper, sar_af, sar_af_max, arming_pct, stop_loss_pct):
         upper_band, lower_band = self.calculate_bollinger_bands(bb_period, bb_dev_lower, bb_dev_upper)
         macd, signal_line = self.calculate_macd(macd_fast_period, macd_slow_period, macd_signal_period)
-        rsi, _ = self.calculate_rsi(rsi_period, rsi_threshold)
-        obv_ema_values = self.calculate_obv(obv_ema_period)
+        sar = self.calculate_parabolic_sar(sar_af, sar_af_max)
 
         initial_balance = 1.0
         current_balance = initial_balance
@@ -119,24 +139,15 @@ class SignalOptimizer:
         buy_points = []
         sell_points = []
 
-        macd_signal_persistence = 0
-        macd_stick = int(macd_stick)
-
         for i in range(1, len(self.data)):
             current_price = self.data['close'].iloc[i]
             signals_met = 0
 
             if macd.iloc[i] > signal_line.iloc[i] and macd.iloc[i-1] <= signal_line.iloc[i-1]:
                 signals_met += 1
-                macd_signal_persistence = macd_stick
-            elif macd_signal_persistence > 0:
-                signals_met += 1
-                macd_signal_persistence -= 1
-            if rsi.iloc[i] < rsi_threshold:
-                signals_met += 1
-            if obv_ema_values.iloc[i] > obv_ema_values.iloc[i-1]:
-                signals_met += 1
             if current_price < lower_band.iloc[i]:
+                signals_met += 1
+            if current_price > sar.iloc[i]:
                 signals_met += 1
 
             # Logic for opening position
@@ -166,7 +177,6 @@ class SignalOptimizer:
 
         # Calculate the final percent gain over the entire period
         total_percent_gain = (current_balance - initial_balance) / initial_balance * 100
-        # print(signal_counters)
         return total_percent_gain, buy_points, sell_points
 
     def evaluate_wrapper(self, params):
@@ -211,7 +221,7 @@ class SignalOptimizer:
             print("\nOptimization interrupted by user. Proceeding with results obtained so far.")
         try:
             # Sequential Bayesian optimization
-            best_performance = 0
+            top_performance = 0
             with tqdm(total=N_ITER, desc="Optimizing points") as pbar:
                 for _ in range(N_ITER):
                     if INTERRUPTED:
@@ -220,10 +230,10 @@ class SignalOptimizer:
                     next_params = optimizer.suggest(utility)
                     performance, _, _ = self.evaluate_performance(**next_params)
                     optimizer.register(params=next_params, target=performance)
-                    if performance > best_performance:
-                        best_performance = performance
-                        print(f"New Best: {performance}")
                     pbar.update(1)
+                    if performance > top_performance:
+                        top_performance = performance
+                        print(f"New top performance: {performance}")
 
         except KeyboardInterrupt:
             print("\nOptimization interrupted by user. Proceeding with results obtained so far.")
@@ -279,20 +289,16 @@ def parse_args():
     parser.add_argument("--macd_slow_max", type=int, default=26, help="Maximum MACD slow period")
     parser.add_argument("--macd_signal_min", type=int, default=9, help="Minimum MACD signal period")
     parser.add_argument("--macd_signal_max", type=int, default=18, help="Maximum MACD signal period")
-    parser.add_argument("--macd_stick_min", type=int, default=1, help="Minimum MACD periods to stick")
-    parser.add_argument("--macd_stick_max", type=int, default=4, help="Maximum MACD periods to stick")
-    parser.add_argument("--rsi_period_min", type=int, default=10, help="Minimum RSI period")
-    parser.add_argument("--rsi_period_max", type=int, default=30, help="Maximum RSI period")
-    parser.add_argument("--rsi_threshold_min", type=int, default=20, help="Minimum RSI threshold for oversold condition")
-    parser.add_argument("--rsi_threshold_max", type=int, default=30, help="Maximum RSI threshold for oversold condition")
-    parser.add_argument("--obv_ema_period_min", type=int, default=10, help="Minimum OBV EMA period")
-    parser.add_argument("--obv_ema_period_max", type=int, default=20, help="Maximum OBV EMA period")
     parser.add_argument("--bb_period_min", type=int, default=5, help="Minimum Bollinger Bands period")
     parser.add_argument("--bb_period_max", type=int, default=20, help="Maximum Bollinger Bands period")
     parser.add_argument("--bb_dev_lower_min", type=float, default=1.5, help="Minimum Bollinger Bands lower deviation")
     parser.add_argument("--bb_dev_lower_max", type=float, default=2.5, help="Maximum Bollinger Bands lower deviation")
     parser.add_argument("--bb_dev_upper_min", type=float, default=1.5, help="Minimum Bollinger Bands upper deviation")
     parser.add_argument("--bb_dev_upper_max", type=float, default=2.5, help="Maximum Bollinger Bands upper deviation")
+    parser.add_argument("--sar_af_max", type=float, default=0.2, help="Maximum accelerating factor for SAR")
+    parser.add_argument("--sar_af_min", type=float, default=0.02, help="Minimum accelerating factor for SAR")
+    parser.add_argument("--sar_af_max_max", type=float, default=0.4, help="Maximum accelerating factor max for SAR")
+    parser.add_argument("--sar_af_max_min", type=float, default=0.2, help="Minimum accelerating factor max for SAR")
     parser.add_argument("--arming_pct_min", type=float, default=0.6, help="Minimum arming percentage for stop loss")
     parser.add_argument("--arming_pct_max", type=float, default=1.5, help="Maximum arming percentage for stop loss")
     parser.add_argument("--stop_loss_pct_min", type=float, default=0.1, help="Minimum stop loss percentage")
@@ -323,13 +329,11 @@ if __name__ == "__main__":
         'macd_fast_period': (args.macd_fast_min, args.macd_fast_max),
         'macd_slow_period': (args.macd_slow_min, args.macd_slow_max),
         'macd_signal_period': (args.macd_signal_min, args.macd_signal_max),
-        'macd_stick': (args.macd_stick_min, args.macd_stick_max),
-        'rsi_period': (args.rsi_period_min, args.rsi_period_max),
-        'rsi_threshold': (args.rsi_threshold_min, args.rsi_threshold_max),
-        'obv_ema_period': (args.obv_ema_period_min, args.obv_ema_period_max),
         'bb_period': (args.bb_period_min, args.bb_period_max),
         'bb_dev_lower': (args.bb_dev_lower_min, args.bb_dev_lower_max),
         'bb_dev_upper': (args.bb_dev_upper_min, args.bb_dev_upper_max),
+        'sar_af': (args.sar_af_min, args.sar_af_max),
+        'sar_af_max': (args.sar_af_max_min, args.sar_af_max_max),
         'arming_pct': (args.arming_pct_min, args.arming_pct_max),
         'stop_loss_pct': (args.stop_loss_pct_min, args.stop_loss_pct_max)
     }
