@@ -12,12 +12,12 @@ from math import ceil
 from tqdm import tqdm
 
 
-START_DATE = '2023-11-30'
-END_DATE = '2023-12-31'
-INIT_POINTS = 500
+START_DATE = '2023-10-30'
+END_DATE = '2023-11-29'
+INIT_POINTS = 200
 N_ITER = 1000
-PAIR_POINTS = INIT_POINTS + N_ITER
-MAX_HOLD_TIME = 48  # 12 hours in minutes
+PAIR_POINTS = int((INIT_POINTS + N_ITER) / 2)
+MAX_HOLD_TIME = 720  # in minutes
 
 INTERRUPTED = False
 
@@ -123,8 +123,8 @@ class SignalOptimizer:
 
         return pd.Series(sar, index=self.data.index)
 
-    def evaluate_performance(self, macd_fast_period, macd_slow_period, macd_signal_period, bb_period, bb_dev_lower, bb_dev_upper, sar_af, sar_af_max, arming_pct, stop_loss_pct):
-        upper_band, lower_band = self.calculate_bollinger_bands(bb_period, bb_dev_lower, bb_dev_upper)
+    def evaluate_performance(self, macd_fast_period, macd_slow_period, macd_signal_period, bb_period, bb_dev, sar_af, sar_af_max, arming_pct, stop_loss_pct):
+        upper_band, lower_band = self.calculate_bollinger_bands(bb_period, bb_dev, bb_dev)
         macd, signal_line = self.calculate_macd(macd_fast_period, macd_slow_period, macd_signal_period)
         sar = self.calculate_parabolic_sar(sar_af, sar_af_max)
 
@@ -291,10 +291,8 @@ def parse_args():
     parser.add_argument("--macd_signal_max", type=int, default=18, help="Maximum MACD signal period")
     parser.add_argument("--bb_period_min", type=int, default=5, help="Minimum Bollinger Bands period")
     parser.add_argument("--bb_period_max", type=int, default=20, help="Maximum Bollinger Bands period")
-    parser.add_argument("--bb_dev_lower_min", type=float, default=1.5, help="Minimum Bollinger Bands lower deviation")
-    parser.add_argument("--bb_dev_lower_max", type=float, default=2.5, help="Maximum Bollinger Bands lower deviation")
-    parser.add_argument("--bb_dev_upper_min", type=float, default=1.5, help="Minimum Bollinger Bands upper deviation")
-    parser.add_argument("--bb_dev_upper_max", type=float, default=2.5, help="Maximum Bollinger Bands upper deviation")
+    parser.add_argument("--bb_dev_min", type=float, default=1.5, help="Minimum Bollinger Bands deviation")
+    parser.add_argument("--bb_dev_max", type=float, default=2.5, help="Maximum Bollinger Bands deviation")
     parser.add_argument("--sar_af_max", type=float, default=0.2, help="Maximum accelerating factor for SAR")
     parser.add_argument("--sar_af_min", type=float, default=0.02, help="Minimum accelerating factor for SAR")
     parser.add_argument("--sar_af_max_max", type=float, default=0.4, help="Maximum accelerating factor max for SAR")
@@ -330,8 +328,7 @@ if __name__ == "__main__":
         'macd_slow_period': (args.macd_slow_min, args.macd_slow_max),
         'macd_signal_period': (args.macd_signal_min, args.macd_signal_max),
         'bb_period': (args.bb_period_min, args.bb_period_max),
-        'bb_dev_lower': (args.bb_dev_lower_min, args.bb_dev_lower_max),
-        'bb_dev_upper': (args.bb_dev_upper_min, args.bb_dev_upper_max),
+        'bb_dev': (args.bb_dev_min, args.bb_dev_max),
         'sar_af': (args.sar_af_min, args.sar_af_max),
         'sar_af_max': (args.sar_af_max_min, args.sar_af_max_max),
         'arming_pct': (args.arming_pct_min, args.arming_pct_max),
