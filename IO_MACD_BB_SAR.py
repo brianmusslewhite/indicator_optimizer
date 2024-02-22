@@ -12,13 +12,7 @@ from math import ceil
 from tqdm import tqdm
 
 
-START_DATE = '2023-10-30'
-END_DATE = '2023-11-29'
-INIT_POINTS = 200
-N_ITER = 1000
-PAIR_POINTS = int((INIT_POINTS + N_ITER) / 2)
 MAX_HOLD_TIME = 720  # in minutes
-
 INTERRUPTED = False
 
 
@@ -30,10 +24,15 @@ def signal_handler(signum, frame):
 
 
 class SignalOptimizer:
-    def __init__(self, filepath, pbounds, number_of_cores):
+    def __init__(self, filepath, pbounds, number_of_cores, start_date, end_date, init_points, iter_points, pair_points):
         self.PBOUNDS = pbounds
         self.filepath = filepath
         self.number_of_cores = number_of_cores
+        self.start_date = start_date
+        self.end_date = end_date
+        self.init_points = init_points
+        self.iter_points = iter_points
+        self.pair_points = pair_points
         self.dataset_name = os.path.basename(self.filepath).split('.')[0]
 
         self.plot_subfolder = os.path.join('indicator_optimizer_plots', self.dataset_name)
@@ -52,12 +51,12 @@ class SignalOptimizer:
 
         available_start_date = self.data.index.min()
         available_end_date = self.data.index.max()
-        start_date = max(pd.Timestamp(START_DATE), available_start_date)
-        end_date = min(pd.Timestamp(END_DATE), available_end_date)
+        start_date = max(pd.Timestamp(self.start_date), available_start_date)
+        end_date = min(pd.Timestamp(self.end_date), available_end_date)
 
         if start_date > end_date:
             raise ValueError("Adjusted start date is after the adjusted end date. No data available for the given range.")
-        if start_date != pd.Timestamp(START_DATE) or end_date != pd.Timestamp(END_DATE):
+        if start_date != pd.Timestamp(self.start_date) or end_date != pd.Timestamp(self.end_date):
             print(f"Date range adjusted based on available data: {start_date.date()} to {end_date.date()}")
         self.data = self.data.loc[start_date:end_date]
         if self.data.empty:
@@ -194,7 +193,7 @@ class SignalOptimizer:
             verbose=2
         )
         utility = UtilityFunction(kind="ucb", kappa=2.5, xi=0.0)
-        init_points = [optimizer.suggest(utility) for _ in range(INIT_POINTS)]
+        init_points = [optimizer.suggest(utility) for _ in range(self.init_points)]
 
         batch_size = self.number_of_cores
         num_batches = ceil(len(init_points) / batch_size)
@@ -222,8 +221,8 @@ class SignalOptimizer:
         try:
             # Sequential Bayesian optimization
             top_performance = 0
-            with tqdm(total=N_ITER, desc="Optimizing points") as pbar:
-                for _ in range(N_ITER):
+            with tqdm(total=self.iter_points, desc="Optimizing points") as pbar:
+                for _ in range(self.iter_points):
                     if INTERRUPTED:
                         print("Ctrl+C, breaking out of initial processing.")
                         break  # Exit the loop if an interruption was signaled
@@ -240,7 +239,7 @@ class SignalOptimizer:
 
         # Process and return the results obtained so far, regardless of whether there was an interruption
         sorted_results = sorted(optimizer.res, key=lambda x: x['target'], reverse=True)
-        self.top_results = sorted_results[:PAIR_POINTS] if len(sorted_results) >= PAIR_POINTS else sorted_results
+        self.top_results = sorted_results[:self.pair_points] if len(sorted_results) >= self.pair_points else sorted_results
         return self.top_results
 
     def visualize_top_results(self):
@@ -259,7 +258,7 @@ class SignalOptimizer:
         pairplot = sns.pairplot(filtered_results_df, diag_kind='kde', plot_kws={'alpha': 0.6, 's': 80, 'edgecolor': 'k'}, height=2)
         pairplot.figure.suptitle(f'{self.dataset_name}', size=12)
 
-        filename = f"{self.dataset_name}_PairPlot_{START_DATE}_to_{END_DATE}_Date_{self.time_now}.png"
+        filename = f"{self.dataset_name}_PairPlot_{self.start_date}_to_{self.end_date}_Date_{self.time_now}.png"
         plt.savefig(os.path.join(self.plot_subfolder, filename))
         plt.show()
 
@@ -270,12 +269,12 @@ class SignalOptimizer:
         plt.scatter(self.data.loc[self.data.index.isin(buy_points), 'time'], self.data.loc[self.data.index.isin(buy_points), 'close'], label='Buy', marker='^', color='green', alpha=1)
         plt.scatter(self.data.loc[self.data.index.isin(sell_points), 'time'], self.data.loc[self.data.index.isin(sell_points), 'close'], label='Sell', marker='v', color='red', alpha=1)
 
-        plt.title(f'{self.dataset_name}_{START_DATE}_to_{END_DATE}')
+        plt.title(f'{self.dataset_name}_{self.start_date}_to_{self.end_date}')
         plt.xlabel('Time')
         plt.ylabel('Price')
         plt.legend()
 
-        filename = f"{self.dataset_name}_BUYSELLResults_{START_DATE}_to_{END_DATE}_Date_{self.time_now}.png"
+        filename = f"{self.dataset_name}_BUYSELLResults_{self.start_date}_to_{self.end_date}_Date_{self.time_now}.png"
         plt.savefig(os.path.join(self.plot_subfolder, filename))
         plt.show()
 
@@ -302,11 +301,16 @@ def parse_args():
     parser.add_argument("--stop_loss_pct_min", type=float, default=0.1, help="Minimum stop loss percentage")
     parser.add_argument("--stop_loss_pct_max", type=float, default=0.3, help="Maximum stop loss percentage")
     parser.add_argument("--number_of_cores", type=int, default=1, help="Number of CPU cores to use")
+    parser.add_argument("--start_date", type=str, default='2023-10-30', help="Start date for optimization")
+    parser.add_argument("--end_date", type=str, default='2023-11-29', help="End date for optimization")
+    parser.add_argument("--init_points", type=int, default=100, help="Number of initial points to search")
+    parser.add_argument("--iter_points", type=int, default=100, help="Number of optimization itterations")
+    parser.add_argument("--pair_points", type=int, default=100, help="Number of points to show in the pair graph")
     return parser.parse_args()
 
 
-def run_optimization(filename, pbounds, number_of_cores):
-    optimizer = SignalOptimizer(filename, pbounds, number_of_cores)
+def run_optimization(filename, pbounds, number_of_cores, start_date, end_date, init_points, iter_points, pair_points):
+    optimizer = SignalOptimizer(filename, pbounds, number_of_cores, start_date, end_date, init_points, iter_points, pair_points)
     top_results = optimizer.optimize()
 
     if top_results:
@@ -322,7 +326,6 @@ def run_optimization(filename, pbounds, number_of_cores):
 
 if __name__ == "__main__":
     args = parse_args()
-    FILEPATH = args.filename
     PBOUNDS = {
         'macd_fast_period': (args.macd_fast_min, args.macd_fast_max),
         'macd_slow_period': (args.macd_slow_min, args.macd_slow_max),
@@ -335,4 +338,6 @@ if __name__ == "__main__":
         'stop_loss_pct': (args.stop_loss_pct_min, args.stop_loss_pct_max)
     }
 
-    run_optimization(FILEPATH, PBOUNDS, args.number_of_cores)
+    run_optimization(args.filename, PBOUNDS, args.number_of_cores, args.start_date, args.end_date, args.init_points, args.iter_points, args.pair_points)
+
+
