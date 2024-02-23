@@ -122,9 +122,9 @@ class SignalOptimizer:
 
         return pd.Series(sar, index=self.data.index)
 
-    def evaluate_performance(self, macd_fast_period, macd_slow_period, macd_signal_period, bb_period, bb_dev, sar_af, sar_af_max, arming_pct, stop_loss_pct):
-        upper_band, lower_band = self.calculate_bollinger_bands(bb_period, bb_dev, bb_dev)
-        macd, signal_line = self.calculate_macd(macd_fast_period, macd_slow_period, macd_signal_period)
+    def evaluate_performance(self, macd_fast_p, macd_slow_p, macd_sig_p, bb_p, bb_dev, sar_af, sar_af_max, arm_pct, stop_loss_pct):
+        upper_band, lower_band = self.calculate_bollinger_bands(bb_p, bb_dev, bb_dev)
+        macd, signal_line = self.calculate_macd(macd_fast_p, macd_slow_p, macd_sig_p)
         sar = self.calculate_parabolic_sar(sar_af, sar_af_max)
 
         initial_balance = 1.0
@@ -161,7 +161,7 @@ class SignalOptimizer:
             if position_open:
                 holding_time = i - entry_index
                 max_holding_time_reached = holding_time >= (MAX_HOLD_TIME / self.data_frequency_in_minutes)
-                if not armed and current_price >= entry_price * (1 + arming_pct / 100):
+                if not armed and current_price >= entry_price * (1 + arm_pct / 100):
                     armed = True
 
                 if armed and current_price <= highest_price_after_buy * (1 - stop_loss_pct / 100) or max_holding_time_reached:
@@ -327,17 +327,15 @@ def run_optimization(filename, pbounds, number_of_cores, start_date, end_date, i
 if __name__ == "__main__":
     args = parse_args()
     PBOUNDS = {
-        'macd_fast_period': (args.macd_fast_min, args.macd_fast_max),
-        'macd_slow_period': (args.macd_slow_min, args.macd_slow_max),
-        'macd_signal_period': (args.macd_signal_min, args.macd_signal_max),
-        'bb_period': (args.bb_period_min, args.bb_period_max),
+        'macd_fast_p': (args.macd_fast_min, args.macd_fast_max),
+        'macd_slow_p': (args.macd_slow_min, args.macd_slow_max),
+        'macd_sig_p': (args.macd_signal_min, args.macd_signal_max),
+        'bb_p': (args.bb_period_min, args.bb_period_max),
         'bb_dev': (args.bb_dev_min, args.bb_dev_max),
         'sar_af': (args.sar_af_min, args.sar_af_max),
         'sar_af_max': (args.sar_af_max_min, args.sar_af_max_max),
-        'arming_pct': (args.arming_pct_min, args.arming_pct_max),
+        'arm_pct': (args.arming_pct_min, args.arming_pct_max),
         'stop_loss_pct': (args.stop_loss_pct_min, args.stop_loss_pct_max)
     }
 
     run_optimization(args.filename, PBOUNDS, args.number_of_cores, args.start_date, args.end_date, args.init_points, args.iter_points, args.pair_points)
-
-
