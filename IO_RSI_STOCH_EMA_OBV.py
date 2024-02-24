@@ -12,7 +12,7 @@ from math import ceil
 from tqdm import tqdm
 
 
-MAX_HOLD_TIME = 1440  # in minutes
+MAX_HOLD_TIME = (1440)  # in minutes
 INTERRUPTED = False
 
 
@@ -104,7 +104,7 @@ class SignalOptimizer:
         obv_ema = pd.Series(obv).ewm(span=ema_period, adjust=False).mean()
         return obv_ema
 
-    def evaluate_performance(self, rsi_p, rsi_thr, short_ema_p, long_ema_p, stoch_k_p, stoch_slow_k_p, stoch_slow_d_p, stoch_thr, obv_ema_p, arm_pct, stop_loss_pct):
+    def evaluate_performance(self, rsi_p, rsi_thr, short_ema_p, long_ema_p, stoch_k_p, stoch_slow_k_p, stoch_slow_d_p, stoch_thr, obv_ema_p, arm_pct, arm_stp_ls_pct, stp_ls_pct):
         rsi, _ = self.calculate_rsi(rsi_p, rsi_thr)
         fast_ema, slow_ema = self.calculate_ema(short_ema_p, long_ema_p)
         stoch_avg = self.calculate_stochastic_oscillator(stoch_k_p, stoch_slow_k_p, stoch_slow_d_p)
@@ -146,15 +146,26 @@ class SignalOptimizer:
             if position_open:
                 holding_time = i - entry_index
                 max_holding_time_reached = holding_time >= (MAX_HOLD_TIME / self.data_frequency_in_minutes)
+
+                if current_price <= entry_price * (1 - stp_ls_pct / 100):
+                    sell_points.append(self.data.index[i])
+                    trade_return = (current_price - entry_price) / entry_price
+                    capital_at_risk = current_balance * 0.10
+                    profit_from_trade = capital_at_risk * trade_return
+                    current_balance += profit_from_trade
+                    position_open = False
+                    armed = False
+                    entry_index = -1
+
                 if not armed and current_price >= entry_price * (1 + arm_pct / 100):
                     armed = True
 
-                if armed and current_price <= highest_price_after_buy * (1 - stop_loss_pct / 100) or max_holding_time_reached:
+                if armed and current_price <= highest_price_after_buy * (1 - arm_stp_ls_pct / 100) or max_holding_time_reached:
                     sell_points.append(self.data.index[i])
-                    trade_return = (current_price - entry_price) / entry_price  # Calculate return of the trade
-                    capital_at_risk = current_balance * 0.10  # 10% of current capital at risk
-                    profit_from_trade = capital_at_risk * trade_return  # Profit from the 10% capital used
-                    current_balance += profit_from_trade  # Update current balance with profit from trade
+                    trade_return = (current_price - entry_price) / entry_price
+                    capital_at_risk = current_balance * 0.10
+                    profit_from_trade = capital_at_risk * trade_return
+                    current_balance += profit_from_trade
                     position_open = False
                     armed = False
                     entry_index = -1
@@ -289,8 +300,11 @@ def parse_args():
     # Sell Parameters
     parser.add_argument("--arming_pct_min", type=float, default=0.6, help="Minimum arming percentage for stop loss")
     parser.add_argument("--arming_pct_max", type=float, default=1.5, help="Maximum arming percentage for stop loss")
-    parser.add_argument("--stop_loss_pct_min", type=float, default=0.1, help="Minimum stop loss percentage")
-    parser.add_argument("--stop_loss_pct_max", type=float, default=0.3, help="Maximum stop loss percentage")
+    parser.add_argument("--arm_stop_loss_pct_min", type=float, default=0.1, help="Minimum stop loss percentage after arming")
+    parser.add_argument("--arm_stop_loss_pct_max", type=float, default=0.3, help="Maximum stop loss percentage after arming")
+    parser.add_argument("--stop_loss_pct_min", type=float, default=1, help="Minimum stop loss percentage")
+    parser.add_argument("--stop_loss_pct_max", type=float, default=2, help="Maximum stop loss percentage")
+
     # Inputs
     parser.add_argument("--filename", type=str, required=True, help="Input CSV file name")
     parser.add_argument("--number_of_cores", type=int, default=1, help="Number of CPU cores to use during initial search")
@@ -330,7 +344,8 @@ if __name__ == "__main__":
         'stoch_thr': (args.stoch_k_period_min, args.stoch_k_period_max),
         'obv_ema_p': (args.obv_ema_period_min, args.obv_ema_period_max),
         'arm_pct': (args.arming_pct_min, args.arming_pct_max),
-        'stop_loss_pct': (args.stop_loss_pct_min, args.stop_loss_pct_max)
+        'arm_stp_ls_pct': (args.arm_stop_loss_pct_min, args.arm_stop_loss_pct_max),
+        'stp_ls_pct': (args.stop_loss_pct_min, args.stop_loss_pct_max)
     }
 
     run_optimization(args.filename, PBOUNDS, args.number_of_cores, args.start_date, args.end_date, args.init_points, args.iter_points, args.pair_points)
