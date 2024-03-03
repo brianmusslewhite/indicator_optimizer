@@ -212,7 +212,7 @@ class SignalOptimizer:
 
         profitable_ratio = profitable_trades / max(1, unprofitable_trades)
 
-        objective_function = (profitable_ratio * adjusted_percent_gain) + (len(returns) / len(self.data))
+        objective_function = (profitable_ratio * adjusted_percent_gain * (len(returns) / len(self.data)))
 
         return objective_function, buy_points, sell_points, total_percent_gain, profitable_trades
 

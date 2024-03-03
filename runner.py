@@ -10,7 +10,7 @@ elif os_name == "Windows":
 
 configs = [
     ("BCHXBT_15min_Kraken.csv", {
-        'start_date': '2023-11-1', 'end_date': '2023-12-31',
+        'start_date': '2023-12-1', 'end_date': '2023-12-31',
         'init_points': 1000, 'iter_points': 1000,
         'pair_points': 500,
         'rsi_period_min': 2, 'rsi_period_max': 30,
