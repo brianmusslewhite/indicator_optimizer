@@ -126,6 +126,7 @@ class SignalOptimizer:
         sell_points = []
         profitable_trades = 0
         unprofitable_trades = 0
+        returns = []
 
         for i in range(1, len(self.data)):
             current_price = self.data['close'].iloc[i]
@@ -141,7 +142,7 @@ class SignalOptimizer:
                 signals_met += 1
 
             # Logic for opening position
-            if signals_met >= 4 and not position_open:
+            if signals_met >= 3 and not position_open:
                 buy_points.append(self.data.index[i])
                 position_open = True
                 entry_price = current_price
@@ -167,6 +168,7 @@ class SignalOptimizer:
                         profitable_trades += 1
                     else:
                         unprofitable_trades += 1
+                    returns.append(current_price - entry_price)
 
                 # Arming stop loss and max holding time
                 if not armed and current_price >= entry_price * (1 + arm_pct / 100):
@@ -185,14 +187,32 @@ class SignalOptimizer:
                         profitable_trades += 1
                     else:
                         unprofitable_trades += 1
+                    returns.append(current_price - entry_price)
 
         total_percent_gain = (current_balance - initial_balance) / initial_balance * 100
 
-        profitable_ratio = profitable_trades / max(1, unprofitable_trades)
-        normalized_gain = total_percent_gain / 100
-        risk_penalty = unprofitable_trades / (profitable_trades + 1)
+        # Remove outliers from percent gain for objective function
+        if len(returns) > 0:
+            returns = np.array(returns)
 
-        objective_function = (profitable_ratio * normalized_gain) - risk_penalty
+            # Calculate Q1 and Q3
+            Q1 = np.percentile(returns, 24)
+            Q3 = np.percentile(returns, 75)
+            IQR = Q3 - Q1
+
+            # Identify outliers
+            lower_bound = Q1 - 1.5 * IQR
+            upper_bound = Q3 + 1.5 * IQR
+
+            # Remove outliers
+            filtered_returns = returns[(returns >= lower_bound) & (returns <= upper_bound)]
+            adjusted_percent_gain = sum(filtered_returns) / initial_balance * 100
+        else:
+            adjusted_percent_gain = 0
+
+        profitable_ratio = profitable_trades / max(1, unprofitable_trades)
+
+        objective_function = (profitable_ratio * adjusted_percent_gain) + (len(returns) / len(self.data))
 
         return objective_function, buy_points, sell_points, total_percent_gain, profitable_trades
 
