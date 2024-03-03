@@ -47,17 +47,20 @@ def process_trading_history(file_path, data_frequency_minutes):
 
 
 file_paths = [
-    # r'~/Downloads/Kraken_Trading_History/DASHXBT.csv',
-    # r'~/Downloads/Kraken_Trading_History/EOSXBT.csv',
-    # r'~/Downloads/Kraken_Trading_History/XRPXBT.csv',
+    r'~/Downloads/Kraken_Trading_History/DASHXBT.csv',
+    r'~/Downloads/Kraken_Trading_History/MATICXBT.csv',
+    r'~/Downloads/Kraken_Trading_History/LINKXBT.csv',
+    r'~/Downloads/Kraken_Trading_History/BCHXBT.csv',
+    r'~/Downloads/Kraken_Trading_History/ETHXBT.csv',
+    r'~/Downloads/Kraken_Trading_History/EOSXBT.csv',
+    r'~/Downloads/Kraken_Trading_History/XRPXBT.csv',
     r'~/Downloads/Kraken_Trading_History/LTCXBT.csv',
-    # r'~/Downloads/Kraken_Trading_History/XDGXBT.csv',
-    # r'~/Downloads/Kraken_Trading_History/XMRXBT.csv',
-    # r'~/Downloads/Kraken_Trading_History/XLMXBT.csv',
-    # r'~/Downloads/Kraken_Trading_History/XRPXBT.csv'
+    r'~/Downloads/Kraken_Trading_History/XDGXBT.csv',
+    r'~/Downloads/Kraken_Trading_History/XLMXBT.csv',
+    r'~/Downloads/Kraken_Trading_History/XRPXBT.csv'
 ]
 
-data_frequency_minutes = [30]
+data_frequency_minutes = [5, 15]
 
 for file_path in file_paths:
     for frequency in data_frequency_minutes:

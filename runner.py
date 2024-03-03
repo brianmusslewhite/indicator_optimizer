@@ -4,13 +4,13 @@ import platform
 
 os_name = platform.system()
 if os_name == "Linux" or os_name == "Darwin":
-    python_version = 'python3'
+    python_version = 'gamemoderun python3'
 elif os_name == "Windows":
     python_version = 'python'
 
 configs = [
     ("BCHXBT_15min_Kraken.csv", {
-        'start_date': '2023-10-1', 'end_date': '2023-12-31',
+        'start_date': '2023-1-1', 'end_date': '2023-12-31',
         'init_points': 500, 'iter_points': 1000,
         'pair_points': 500,
         'rsi_period_min': 2, 'rsi_period_max': 30,
@@ -188,7 +188,7 @@ n_jobs = max(1, num_cpu_cores // len(configs))
 
 for filename, inputs in configs:
     command = ' '.join([
-        'gamemoderun', python_version, 'IO_RSI_STOCH_EMA_OBV.py',
+        python_version, 'IO_RSI_STOCH_EMA_OBV.py',
         '--filename', filename,
         '--rsi_period_min', str(inputs['rsi_period_min']),
         '--rsi_period_max', str(inputs['rsi_period_max']),
