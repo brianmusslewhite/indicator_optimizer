@@ -108,7 +108,7 @@ class SignalOptimizer:
         rsi, _ = self.calculate_rsi(rsi_p, rsi_thr)
         fast_ema, slow_ema = self.calculate_ema(short_ema_p, long_ema_p)
         stoch_avg = self.calculate_stochastic_oscillator(stoch_k_p, stoch_slow_k_p, stoch_slow_d_p)
-        # obv_ema_values = self.calculate_obv(obv_ema_p)
+        obv_ema_values = self.calculate_obv(obv_ema_p)
 
         initial_balance = 1.0
         current_balance = initial_balance
@@ -127,15 +127,15 @@ class SignalOptimizer:
 
             if rsi.iloc[i] < rsi_thr:
                 signals_met += 1
-            if fast_ema.iloc[i] > slow_ema.iloc[i] and fast_ema.iloc[i-1] <= slow_ema.iloc[i-1]:
+            if fast_ema.iloc[i] > slow_ema.iloc[i] and fast_ema.iloc[i-1] <= slow_ema.iloc[i-1] and short_ema_p < long_ema_p:
                 signals_met += 1
             if stoch_avg.iloc[i] <= stoch_thr:
                 signals_met += 1
-            # if obv_ema_values.iloc[i] > obv_ema_values.iloc[i-1]:
-            #     signals_met += 1
+            if obv_ema_values.iloc[i] > obv_ema_values.iloc[i-1]:
+                signals_met += 1
 
             # Logic for opening position
-            if signals_met >= 3 and not position_open:
+            if signals_met >= 4 and not position_open:
                 buy_points.append(self.data.index[i])
                 position_open = True
                 entry_price = current_price
@@ -195,7 +195,7 @@ class SignalOptimizer:
         num_batches = ceil(len(init_points) / batch_size)
 
         try:
-            for batch_idx in tqdm(range(num_batches), desc="Processing batches"):
+            for batch_idx in tqdm(range(num_batches), desc=f"Init {self.filepath}"):
                 if INTERRUPTED:
                     print("Ctrl+C, breaking out of initial processing.")
                     break  # Exit the loop if an interruption was signaled
@@ -217,7 +217,7 @@ class SignalOptimizer:
         try:
             # Sequential Bayesian optimization
             top_performance = 0
-            with tqdm(total=self.iter_points, desc="Optimizing points") as pbar:
+            with tqdm(total=self.iter_points, desc=f"Optimizing {self.filepath}") as pbar:
                 for _ in range(self.iter_points):
                     if INTERRUPTED:
                         print("Ctrl+C, breaking out of initial processing.")
