@@ -108,7 +108,7 @@ class SignalOptimizer:
         obv_ema = pd.Series(obv).ewm(span=ema_period, adjust=False).mean()
         return obv_ema
 
-    def evaluate_performance(self, rsi_p, rsi_thr, short_ema_p, long_ema_p, stoch_k_p, stoch_slow_k_p, stoch_slow_d_p, stoch_thr, obv_ema_p, arm_pct, arm_stp_ls_pct, stp_ls_pct):
+    def evaluate_performance(self, rsi_p, rsi_thr, short_ema_p, long_ema_p, ema_persistence, stoch_k_p, stoch_slow_k_p, stoch_slow_d_p, stoch_thr, obv_ema_p, arm_pct, arm_stp_ls_pct, stp_ls_pct):
         rsi, _ = self.calculate_rsi(rsi_p, rsi_thr)
         fast_ema, slow_ema = self.calculate_ema(short_ema_p, long_ema_p)
         stoch_avg = self.calculate_stochastic_oscillator(stoch_k_p, stoch_slow_k_p, stoch_slow_d_p)
@@ -128,14 +128,26 @@ class SignalOptimizer:
         unprofitable_trades = 0
         returns = []
 
+        ema_signal_active = False
+        ema_signal_counter = 0
+
         for i in range(1, len(self.data)):
             current_price = self.data['close'].iloc[i]
             signals_met = 0
 
             if rsi.iloc[i] < rsi_thr:
                 signals_met += 1
+
             if fast_ema.iloc[i] > slow_ema.iloc[i] and fast_ema.iloc[i-1] <= slow_ema.iloc[i-1] and short_ema_p < long_ema_p:
                 signals_met += 1
+                ema_signal_active = True
+                ema_signal_counter = 0
+            elif ema_signal_active:
+                ema_signal_counter += 1
+                signals_met += 1
+                if ema_signal_counter > ema_persistence:
+                    ema_signal_active = False
+
             if stoch_avg.iloc[i] <= stoch_thr:
                 signals_met += 1
             if obv_ema_values.iloc[i] > obv_ema_values.iloc[i-1]:
@@ -190,29 +202,22 @@ class SignalOptimizer:
                     returns.append(current_price - entry_price)
 
         total_percent_gain = (current_balance - initial_balance) / initial_balance * 100
+        total_trades = len(returns)
+        minimum_trades_required = len(self.data) / 10  # average one trade per 10 days min
 
-        # Remove outliers from percent gain for objective function
-        if len(returns) > 0:
+        # Bild objective function
+        if total_trades > 0:
             returns = np.array(returns)
+            variance_of_returns = np.var(returns)
+            profitable_ratio = profitable_trades / max(1, unprofitable_trades)
 
-            # Calculate Q1 and Q3
-            Q1 = np.percentile(returns, 24)
-            Q3 = np.percentile(returns, 75)
-            IQR = Q3 - Q1
+            objective_function = (profitable_ratio * total_percent_gain) - variance_of_returns
 
-            # Identify outliers
-            lower_bound = Q1 - 1.5 * IQR
-            upper_bound = Q3 + 1.5 * IQR
-
-            # Remove outliers
-            filtered_returns = returns[(returns >= lower_bound) & (returns <= upper_bound)]
-            adjusted_percent_gain = sum(filtered_returns) / initial_balance * 100
+            # Penalty if minimum number of trades is not met
+            if total_trades < minimum_trades_required:
+                objective_function = objective_function - abs(objective_function*0.25)
         else:
-            adjusted_percent_gain = 0
-
-        profitable_ratio = profitable_trades / max(1, unprofitable_trades)
-
-        objective_function = (profitable_ratio * adjusted_percent_gain * (len(returns) / len(self.data)))
+            objective_function = -1
 
         return objective_function, buy_points, sell_points, total_percent_gain, profitable_trades
 
@@ -269,12 +274,13 @@ class SignalOptimizer:
                         print("Ctrl+C, breaking out of initial processing.")
                         break  # Exit the loop if an interruption was signaled
                     next_params = optimizer.suggest(utility)
-                    performance, _, _, total_percent_gain, profitable_trades = self.evaluate_performance(**next_params)
+                    performance, buy_points, sell_points, total_percent_gain, profitable_trades = self.evaluate_performance(**next_params)
                     optimizer.register(params=next_params, target=performance)
                     pbar.update(1)
                     if performance > top_performance:
                         top_performance = performance
-                        print(f"New top performance: {performance:.2f}, Positive trades: {profitable_trades}, Percent gain: {total_percent_gain:.2f}")
+                        print(f"New top performance: {performance:.2f}, Positive trades: {profitable_trades}, Total percent gain: {total_percent_gain:.2f}")
+                        #  self.plot_trades(buy_points, sell_points)
 
         except KeyboardInterrupt:
             print("\nOptimization interrupted by user. Proceeding with results obtained so far.")
@@ -340,6 +346,8 @@ def parse_args():
     parser.add_argument("--ema_short_period_max", type=int, default=26, help="Maximum short EMA period")
     parser.add_argument("--ema_long_period_min", type=int, default=26, help="Minimum long EMA period")
     parser.add_argument("--ema_long_period_max", type=int, default=50, help="Maximum long EMA period")
+    parser.add_argument("--ema_persistence_min", type=int, default=1, help="Minimum EMA persistence")
+    parser.add_argument("--ema_persistence_max", type=int, default=4, help="Maximum EMA persistence")
     # OBV EMA Parameters
     parser.add_argument("--obv_ema_period_min", type=int, default=3, help="Minimum OBV EMA period")
     parser.add_argument("--obv_ema_period_max", type=int, default=10, help="Maximum OBV EMA period")
@@ -386,6 +394,7 @@ if __name__ == "__main__":
         'rsi_thr': (args.rsi_threshold_min, args.rsi_threshold_max),
         'short_ema_p': (args.ema_short_period_min, args.ema_short_period_max),
         'long_ema_p': (args.ema_long_period_min, args.ema_long_period_max),
+        'ema_persistence': (args.ema_persistence_min, args.ema_persistence_max),
         'stoch_k_p': (args.stoch_k_period_min, args.stoch_k_period_max),
         'stoch_slow_k_p': (args.stoch_slowing_min, args.stoch_slowing_max),
         'stoch_slow_d_p': (args.stoch_d_period_min, args.stoch_d_period_max),
