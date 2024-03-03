@@ -198,22 +198,26 @@ class SignalOptimizer:
         num_batches = ceil(len(init_points) / batch_size)
 
         try:
-            for batch_idx in tqdm(range(num_batches), desc=f"Init {self.filepath}"):
-                if INTERRUPTED:
-                    print("Ctrl+C, breaking out of initial processing.")
-                    break  # Exit the loop if an interruption was signaled
-                start_idx = batch_idx * batch_size
-                end_idx = min(start_idx + batch_size, len(init_points))
-                batch_points = init_points[start_idx:end_idx]
+            with tqdm(total=self.init_points, desc=f"Initializing {self.filepath}") as pbar:
+                for batch_idx in range(num_batches):
+                    if INTERRUPTED:
+                        print("Ctrl+C, breaking out of initial processing.")
+                        break  # Exit the loop if an interruption was signaled
+                    start_idx = batch_idx * batch_size
+                    end_idx = min(start_idx + batch_size, len(init_points))
+                    batch_points = init_points[start_idx:end_idx]
 
-                # Process each batch in parallel
-                batch_results = Parallel(n_jobs=self.number_of_cores, backend="multiprocessing")(
-                    delayed(self.evaluate_wrapper)(params) for params in batch_points
-                )
+                    # Process each batch in parallel
+                    batch_results = Parallel(n_jobs=self.number_of_cores, backend="multiprocessing")(
+                        delayed(self.evaluate_wrapper)(params) for params in batch_points
+                    )
 
-                # Register the results of each batch
-                for idx, performance in enumerate(batch_results):
-                    optimizer.register(params=batch_points[idx], target=performance)
+                    # Register the results of each batch
+                    for idx, performance in enumerate(batch_results):
+                        optimizer.register(params=batch_points[idx], target=performance)
+
+                    # Update tqdm with the number of points processed in this batch
+                    pbar.update(len(batch_points))
 
         except KeyboardInterrupt:
             print("\nOptimization interrupted by user. Proceeding with results obtained so far.")
