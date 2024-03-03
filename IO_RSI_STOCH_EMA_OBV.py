@@ -2,6 +2,7 @@ import argparse
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import re
 import seaborn as sns
 import signal
 import os
@@ -12,7 +13,7 @@ from math import ceil
 from tqdm import tqdm
 
 
-MAX_HOLD_TIME = (1440)  # in minutes
+MAX_HOLD_TIME = (60*24)*2  # in minutes
 INTERRUPTED = False
 
 
@@ -62,9 +63,11 @@ class SignalOptimizer:
         if self.data.empty:
             raise ValueError(f"No data available between {start_date} and {end_date} after adjustments.")
 
+        match = re.search(r"(\d+)min", filepath)
+        self.data_frequency_in_minutes = int(match.group(1)) if match else None
+
         self.data.ffill(inplace=True)
         self.data.reset_index(inplace=True)
-        self.data_frequency_in_minutes = 15
         self.best_buy_points = []
         self.best_sell_points = []
         self.best_performance = float('-inf')
