@@ -211,7 +211,7 @@ class SignalOptimizer:
             variance_of_returns = np.var(returns)
             profitable_ratio = profitable_trades / max(1, unprofitable_trades)
 
-            objective_function = (profitable_ratio * total_percent_gain) - variance_of_returns
+            objective_function = (profitable_ratio * total_percent_gain) - (variance_of_returns*0.1)
 
             # Penalty if minimum number of trades is not met
             if total_trades < minimum_trades_required:
