@@ -9,7 +9,24 @@ elif os_name == "Windows":
     python_version = 'python'
 
 configs = [
-    # ("BCHXBT_15min_Kraken.csv", {
+    ("BCHXBT_15min_Kraken.csv", {
+        'start_date': '2023-1-1', 'end_date': '2023-12-31',
+        'init_points': 500, 'iter_points': 1000,
+        'pair_points': 500,
+        'rsi_period_min': 2, 'rsi_period_max': 30,
+        'rsi_threshold_min': 10, 'rsi_threshold_max': 60,
+        'ema_short_period_min': 2, 'ema_short_period_max': 20,
+        'ema_long_period_min': 3, 'ema_long_period_max': 50,
+        'stoch_k_period_min': 4, 'stoch_k_period_max': 25,
+        'stoch_d_period_min': 3, 'stoch_d_period_max': 10,
+        'stoch_slowing_min': 3, 'stoch_slowing_max': 10,
+        'obv_ema_period_min': 1, 'obv_ema_period_max': 20,
+        'arming_pct_min': 0.2, 'arming_pct_max': 1.0,
+        'arm_stop_loss_pct_min': 0.05, 'arm_stop_loss_pct_max': 0.3,
+        'stop_loss_pct_min': 1, 'stop_loss_pct_max': 3
+    }),
+
+    # ("DASHXBT_10min_Kraken.csv", {
     #     'start_date': '2023-1-1', 'end_date': '2023-12-31',
     #     'init_points': 200, 'iter_points': 1000,
     #     'pair_points': 500,
@@ -26,7 +43,7 @@ configs = [
     #     'stop_loss_pct_min': 1, 'stop_loss_pct_max': 3
     # }),
 
-    # ("ETHXBT_15min_Kraken.csv", {
+    # ("DASHXBT_10min_Kraken.csv", {
     #     'start_date': '2023-1-1', 'end_date': '2023-12-31',
     #     'init_points': 200, 'iter_points': 1000,
     #     'pair_points': 500,
@@ -43,7 +60,7 @@ configs = [
     #     'stop_loss_pct_min': 1, 'stop_loss_pct_max': 3
     # }),
 
-    # ("MATICXBT_15min_Kraken.csv", {
+    # ("LTCXBT_10min_Kraken.csv", {
     #     'start_date': '2023-1-1', 'end_date': '2023-12-31',
     #     'init_points': 200, 'iter_points': 1000,
     #     'pair_points': 500,
@@ -77,24 +94,7 @@ configs = [
     #     'stop_loss_pct_min': 1, 'stop_loss_pct_max': 3
     # }),
 
-    # ("XDGXBT_15min_Kraken.csv", {
-    #     'start_date': '2023-1-1', 'end_date': '2023-12-31',
-    #     'init_points': 200, 'iter_points': 1000,
-    #     'pair_points': 500,
-    #     'rsi_period_min': 2, 'rsi_period_max': 30,
-    #     'rsi_threshold_min': 10, 'rsi_threshold_max': 60,
-    #     'ema_short_period_min': 2, 'ema_short_period_max': 20,
-    #     'ema_long_period_min': 3, 'ema_long_period_max': 50,
-    #     'stoch_k_period_min': 4, 'stoch_k_period_max': 25,
-    #     'stoch_d_period_min': 3, 'stoch_d_period_max': 10,
-    #     'stoch_slowing_min': 3, 'stoch_slowing_max': 10,
-    #     'obv_ema_period_min': 1, 'obv_ema_period_max': 20,
-    #     'arming_pct_min': 0.2, 'arming_pct_max': 1.0,
-    #     'arm_stop_loss_pct_min': 0.05, 'arm_stop_loss_pct_max': 0.3,
-    #     'stop_loss_pct_min': 1, 'stop_loss_pct_max': 3
-    # }),
-
-    # ("XLMXBT_15min_Kraken.csv", {
+    # ("LTCXBT_20min_Kraken.csv", {
     #     'start_date': '2023-1-1', 'end_date': '2023-12-31',
     #     'init_points': 200, 'iter_points': 1000,
     #     'pair_points': 500,
@@ -162,7 +162,7 @@ configs = [
     #     'stop_loss_pct_min': 1, 'stop_loss_pct_max': 3
     # }),
 
-    # ("LINKXBT_5min_Kraken.csv", {
+    # ("XRPXBT_5min_Kraken.csv", {
     #     'start_date': '2023-1-1', 'end_date': '2023-12-31',
     #     'init_points': 200, 'iter_points': 1000,
     #     'pair_points': 500,
@@ -179,7 +179,7 @@ configs = [
     #     'stop_loss_pct_min': 1, 'stop_loss_pct_max': 3,
     # }),
 
-    # ("LINKXBT_10min_Kraken.csv", {
+    # ("XRPXBT_10min_Kraken.csv", {
     #     'start_date': '2023-1-1', 'end_date': '2023-12-31',
     #     'init_points': 200, 'iter_points': 1000,
     #     'pair_points': 500,
@@ -196,7 +196,7 @@ configs = [
     #     'stop_loss_pct_min': 1, 'stop_loss_pct_max': 3,
     # }),
 
-    # ("LINKXBT_15min_Kraken.csv", {
+    # ("XRPXBT_15min_Kraken.csv", {
     #     'start_date': '2023-1-1', 'end_date': '2023-12-31',
     #     'init_points': 200, 'iter_points': 1000,
     #     'pair_points': 500,
@@ -213,7 +213,7 @@ configs = [
     #     'stop_loss_pct_min': 1, 'stop_loss_pct_max': 3,
     # }),
 
-    # ("LINKXBT_20min_Kraken.csv", {
+    # ("XRPXBT_20min_Kraken.csv", {
     #     'start_date': '2023-1-1', 'end_date': '2023-12-31',
     #     'init_points': 200, 'iter_points': 1000,
     #     'pair_points': 500,
@@ -230,7 +230,7 @@ configs = [
     #     'stop_loss_pct_min': 1, 'stop_loss_pct_max': 3,
     # }),
 
-    # ("LINKXBT_25min_Kraken.csv", {
+    # ("XRPXBT_25min_Kraken.csv", {
     #     'start_date': '2023-1-1', 'end_date': '2023-12-31',
     #     'init_points': 200, 'iter_points': 1000,
     #     'pair_points': 500,
@@ -247,22 +247,22 @@ configs = [
     #     'stop_loss_pct_min': 1, 'stop_loss_pct_max': 3,
     # }),
 
-    ("LINKXBT_30min_Kraken.csv", {
-        'start_date': '2023-1-1', 'end_date': '2023-12-31',
-        'init_points': 200, 'iter_points': 1000,
-        'pair_points': 500,
-        'rsi_period_min': 2, 'rsi_period_max': 30,
-        'rsi_threshold_min': 10, 'rsi_threshold_max': 60,
-        'ema_short_period_min': 2, 'ema_short_period_max': 20,
-        'ema_long_period_min': 3, 'ema_long_period_max': 50,
-        'stoch_k_period_min': 4, 'stoch_k_period_max': 25,
-        'stoch_d_period_min': 3, 'stoch_d_period_max': 10,
-        'stoch_slowing_min': 3, 'stoch_slowing_max': 10,
-        'obv_ema_period_min': 1, 'obv_ema_period_max': 20,
-        'arming_pct_min': 0.2, 'arming_pct_max': 1.0,
-        'arm_stop_loss_pct_min': 0.05, 'arm_stop_loss_pct_max': 0.3,
-        'stop_loss_pct_min': 1, 'stop_loss_pct_max': 3,
-    }),
+    # ("XRPXBT_30min_Kraken.csv", {
+    #     'start_date': '2023-1-1', 'end_date': '2023-12-31',
+    #     'init_points': 200, 'iter_points': 1000,
+    #     'pair_points': 500,
+    #     'rsi_period_min': 2, 'rsi_period_max': 30,
+    #     'rsi_threshold_min': 10, 'rsi_threshold_max': 60,
+    #     'ema_short_period_min': 2, 'ema_short_period_max': 20,
+    #     'ema_long_period_min': 3, 'ema_long_period_max': 50,
+    #     'stoch_k_period_min': 4, 'stoch_k_period_max': 25,
+    #     'stoch_d_period_min': 3, 'stoch_d_period_max': 10,
+    #     'stoch_slowing_min': 3, 'stoch_slowing_max': 10,
+    #     'obv_ema_period_min': 1, 'obv_ema_period_max': 20,
+    #     'arming_pct_min': 0.2, 'arming_pct_max': 1.0,
+    #     'arm_stop_loss_pct_min': 0.05, 'arm_stop_loss_pct_max': 0.3,
+    #     'stop_loss_pct_min': 1, 'stop_loss_pct_max': 3,
+    # }),
 ]
 
 num_cpu_cores = multiprocessing.cpu_count()

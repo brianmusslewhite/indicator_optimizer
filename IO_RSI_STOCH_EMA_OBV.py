@@ -72,6 +72,7 @@ class SignalOptimizer:
         self.best_sell_points = []
         self.best_performance = float('-inf')
         self.param_to_results = {}
+        self.total_percent_gain = 0
 
     def calculate_rsi(self, rsi_period, rsi_threshold):
         rsi_period = int(rsi_period)
@@ -123,6 +124,8 @@ class SignalOptimizer:
         entry_index = -1
         buy_points = []
         sell_points = []
+        profitable_trades = 0
+        unprofitable_trades = 0
 
         for i in range(1, len(self.data)):
             current_price = self.data['close'].iloc[i]
@@ -150,6 +153,7 @@ class SignalOptimizer:
                 holding_time = i - entry_index
                 max_holding_time_reached = holding_time >= (MAX_HOLD_TIME / self.data_frequency_in_minutes)
 
+                # Stop loss
                 if current_price <= entry_price * (1 - stp_ls_pct / 100):
                     sell_points.append(self.data.index[i])
                     trade_return = (current_price - entry_price) / entry_price
@@ -159,7 +163,12 @@ class SignalOptimizer:
                     position_open = False
                     armed = False
                     entry_index = -1
+                    if current_price > entry_price:
+                        profitable_trades += 1
+                    else:
+                        unprofitable_trades += 1
 
+                # Arming stop loss and max holding time
                 if not armed and current_price >= entry_price * (1 + arm_pct / 100):
                     armed = True
 
@@ -172,13 +181,23 @@ class SignalOptimizer:
                     position_open = False
                     armed = False
                     entry_index = -1
+                    if current_price > entry_price:
+                        profitable_trades += 1
+                    else:
+                        unprofitable_trades += 1
 
-        # Calculate the final percent gain over the entire period
         total_percent_gain = (current_balance - initial_balance) / initial_balance * 100
-        return total_percent_gain, buy_points, sell_points
+
+        profitable_ratio = profitable_trades / max(1, unprofitable_trades)
+        normalized_gain = total_percent_gain / 100
+        risk_penalty = unprofitable_trades / (profitable_trades + 1)
+
+        objective_function = (profitable_ratio * normalized_gain) - risk_penalty
+
+        return objective_function, buy_points, sell_points, total_percent_gain, profitable_trades
 
     def evaluate_wrapper(self, params):
-        performance, buy_points, sell_points = self.evaluate_performance(**params)
+        performance, buy_points, sell_points, _, _,  = self.evaluate_performance(**params)
         self.param_to_results[str(params)] = (buy_points, sell_points)
         return performance
 
@@ -198,7 +217,7 @@ class SignalOptimizer:
         num_batches = ceil(len(init_points) / batch_size)
 
         try:
-            with tqdm(total=self.init_points, desc=f"Initializing {self.filepath}") as pbar:
+            with tqdm(total=self.init_points, desc=f"Init {self.filepath}") as pbar:
                 for batch_idx in range(num_batches):
                     if INTERRUPTED:
                         print("Ctrl+C, breaking out of initial processing.")
@@ -230,12 +249,12 @@ class SignalOptimizer:
                         print("Ctrl+C, breaking out of initial processing.")
                         break  # Exit the loop if an interruption was signaled
                     next_params = optimizer.suggest(utility)
-                    performance, _, _ = self.evaluate_performance(**next_params)
+                    performance, _, _, total_percent_gain, profitable_trades = self.evaluate_performance(**next_params)
                     optimizer.register(params=next_params, target=performance)
                     pbar.update(1)
                     if performance > top_performance:
                         top_performance = performance
-                        print(f"New top performance: {performance}")
+                        print(f"New top performance: {performance:.2f}, Positive trades: {profitable_trades}, Percent gain: {total_percent_gain:.2f}")
 
         except KeyboardInterrupt:
             print("\nOptimization interrupted by user. Proceeding with results obtained so far.")
@@ -329,10 +348,12 @@ def run_optimization(filename, pbounds, number_of_cores, start_date, end_date, i
 
     if top_results:
         best_params = top_results[0]['params']
-        final_performance, final_buy_points, final_sell_points = optimizer.evaluate_performance(**best_params)
+        final_performance, final_buy_points, final_sell_points, total_percent_gain, profitable_trades = optimizer.evaluate_performance(**best_params)
 
         print(f"Optimized Indicator Parameters: {best_params}")
-        print(f"Best Target Value (Performance Metric): {top_results[0]['target']}")
+        print(f"Best Performance: {top_results[0]['target']}")
+        print(f"Number of Profitable Trades: {profitable_trades}")
+        print(f"Percent Gain For Optimal Value: {total_percent_gain}")
 
         optimizer.visualize_top_results()
         optimizer.plot_trades(final_buy_points, final_sell_points)
