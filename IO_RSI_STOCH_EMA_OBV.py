@@ -65,6 +65,7 @@ class SignalOptimizer:
 
         match = re.search(r"(\d+)min", filepath)
         self.data_frequency_in_minutes = int(match.group(1)) if match else None
+        self.desired_trade_frequency_days = 2
 
         self.data.ffill(inplace=True)
         self.data.reset_index(inplace=True)
@@ -201,11 +202,12 @@ class SignalOptimizer:
                         unprofitable_trades += 1
                     returns.append(current_price - entry_price)
 
+        objective_function = 0
         total_percent_gain = (current_balance - initial_balance) / initial_balance * 100
         total_trades = len(returns)
-        minimum_trades_required = len(self.data) / 10  # average one trade per 10 days min
+        minimum_trades_required = len(self.data) / self.desired_trade_frequency_days
 
-        # Bild objective function
+        # Build objective function
         if total_trades > 0:
             returns = np.array(returns)
             variance_of_returns = np.var(returns) * 1E8
@@ -214,6 +216,8 @@ class SignalOptimizer:
             var_weight = 0.3
             gain_weight = 1
             target_profit_ratio = 0.8
+            total_trade_penalty = 0
+            profit_ratio_penalty = 0
 
             profit_ratio_factor = (pr_weight * profitable_ratio)
             percent_gain_factor = (gain_weight * total_percent_gain)
@@ -224,15 +228,16 @@ class SignalOptimizer:
             # Penalty if minimum number of trades is not met
             if total_trades < minimum_trades_required:
                 difference_ratio = (minimum_trades_required - total_trades) / total_trades
-                objective_function -= np.exp(difference_ratio/10)
+                total_trade_penalty = difference_ratio*0.1
+                objective_function -= total_trade_penalty
             # Penalty if profit ratio is not met
             if profitable_ratio < target_profit_ratio:
                 diff_from_target = target_profit_ratio - profitable_ratio
-                objective_function -= np.exp(diff_from_target)
-            #  print(f"Score, Profit Ratio, Percent Gain, Variance Factor: {objective_function:8.2f}, {profit_ratio_factor:8.2f}, {percent_gain_factor:8.2f}, {variance_factor:8.2f}")
+                profit_ratio_penalty = diff_from_target*10 # min(np.exp(diff_from_target), 1E9)
+                objective_function -= profit_ratio_penalty
+            # print(f"Score, Profit Ratio, Percent Gain, Variance Factor, Trade Penalty, Profit Ratio Penalty: {objective_function:8.2f}, {profit_ratio_factor:8.2f}, {percent_gain_factor:8.2f}, {variance_factor:8.2f}, {total_trade_penalty:8.2f}, {profit_ratio_penalty:8.2f}")
         else:
-            objective_function = -10000000
-
+            objective_function = -1E9
         return objective_function, buy_points, sell_points, total_percent_gain, profitable_trades
 
     def evaluate_wrapper(self, params):
