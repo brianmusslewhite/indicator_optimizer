@@ -231,7 +231,7 @@ class SignalOptimizer:
                 objective_function -= np.exp(diff_from_target)
             #  print(f"Score, Profit Ratio, Percent Gain, Variance Factor: {objective_function:8.2f}, {profit_ratio_factor:8.2f}, {percent_gain_factor:8.2f}, {variance_factor:8.2f}")
         else:
-            objective_function = -100
+            objective_function = -10000000
 
         return objective_function, buy_points, sell_points, total_percent_gain, profitable_trades
 
