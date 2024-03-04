@@ -208,16 +208,30 @@ class SignalOptimizer:
         # Bild objective function
         if total_trades > 0:
             returns = np.array(returns)
-            variance_of_returns = np.var(returns)
+            variance_of_returns = np.var(returns) * 1E8
             profitable_ratio = profitable_trades / max(1, unprofitable_trades)
+            pr_weight = 20
+            var_weight = 0.3
+            gain_weight = 1
+            target_profit_ratio = 0.8
 
-            objective_function = (profitable_ratio * total_percent_gain) - (variance_of_returns*0.1)
+            profit_ratio_factor = (pr_weight * profitable_ratio)
+            percent_gain_factor = (gain_weight * total_percent_gain)
+            variance_factor = (var_weight * variance_of_returns)
+
+            objective_function = (profit_ratio_factor * percent_gain_factor) - variance_factor
 
             # Penalty if minimum number of trades is not met
             if total_trades < minimum_trades_required:
-                objective_function = objective_function - abs(objective_function*0.25)
+                difference_ratio = (minimum_trades_required - total_trades) / total_trades
+                objective_function -= np.exp(difference_ratio/10)
+            # Penalty if profit ratio is not met
+            if profitable_ratio < target_profit_ratio:
+                diff_from_target = target_profit_ratio - profitable_ratio
+                objective_function -= np.exp(diff_from_target)
+            #  print(f"Score, Profit Ratio, Percent Gain, Variance Factor: {objective_function:8.2f}, {profit_ratio_factor:8.2f}, {percent_gain_factor:8.2f}, {variance_factor:8.2f}")
         else:
-            objective_function = -1
+            objective_function = -100
 
         return objective_function, buy_points, sell_points, total_percent_gain, profitable_trades
 
