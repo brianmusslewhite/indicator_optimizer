@@ -9,9 +9,9 @@ elif os_name == "Windows":
     python_version = 'python'
 
 configs = [
-    ("BCHXBT_15min_Kraken.csv", {
-        'start_date': '2023-11-1', 'end_date': '2023-12-31',
-        'init_points': 200, 'iter_points': 500,
+    ("ETHXBT_15min_Kraken.csv", {
+        'start_date': '2023-6-1', 'end_date': '2023-12-31',
+        'init_points': 500, 'iter_points': 1000,
         'pair_points': 500,
         'rsi_period_min': 2, 'rsi_period_max': 30,
         'rsi_threshold_min': 10, 'rsi_threshold_max': 60,

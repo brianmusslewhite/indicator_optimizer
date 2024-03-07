@@ -11,6 +11,7 @@ from bayes_opt import BayesianOptimization, UtilityFunction
 from joblib import Parallel, delayed
 from math import ceil
 from tqdm import tqdm
+from pyDOE import lhs
 
 
 MAX_HOLD_TIME = (60*24)*2  # in minutes
@@ -65,7 +66,7 @@ class SignalOptimizer:
 
         match = re.search(r"(\d+)min", filepath)
         self.data_frequency_in_minutes = int(match.group(1)) if match else None
-        self.desired_trade_frequency_days = 2
+        self.desired_trade_frequency_days = 4
 
         self.data.ffill(inplace=True)
         self.data.reset_index(inplace=True)
@@ -125,8 +126,6 @@ class SignalOptimizer:
         entry_index = -1
         buy_points = []
         sell_points = []
-        profitable_trades = 0
-        unprofitable_trades = 0
         returns = []
 
         ema_signal_active = False
@@ -177,10 +176,6 @@ class SignalOptimizer:
                     position_open = False
                     armed = False
                     entry_index = -1
-                    if current_price > entry_price:
-                        profitable_trades += 1
-                    else:
-                        unprofitable_trades += 1
                     returns.append(current_price - entry_price)
 
                 # Arming stop loss and max holding time
@@ -196,35 +191,37 @@ class SignalOptimizer:
                     position_open = False
                     armed = False
                     entry_index = -1
-                    if current_price > entry_price:
-                        profitable_trades += 1
-                    else:
-                        unprofitable_trades += 1
                     returns.append(current_price - entry_price)
 
         objective_function = 0
+        profit_ratio = 0
         total_percent_gain = (current_balance - initial_balance) / initial_balance * 100
         total_num_trades = len(returns)
-        minimum_trades_required = len(self.data) / self.desired_trade_frequency_days
+        returns = np.array(returns)
+
+        if total_num_trades > 0:
+            profitable_trades = np.sum(returns > 0)
 
         # Build objective function
         if total_num_trades > 0:
-            returns = np.array(returns)
-            variance_of_returns = np.var(returns) * 1E8
-            profitable_ratio = profitable_trades / max(1, unprofitable_trades)
-            pr_weight = 4
-            var_weight = 1
-            gain_weight = 20
-            total_trade_penalty_weight = 0.01
-            profit_ratio_penalty_weight = 10
+
+            variance_of_returns = np.var(returns)
+            minimum_trades_required = len(self.data) / self.desired_trade_frequency_days
+            profit_ratio = profitable_trades / total_num_trades
             target_profit_ratio = 1
-            
+
+            pr_weight = 1
+            var_weight = 0 * 0.01 * 1E8
+            pg_weight = 1
+            total_trade_penalty_weight = 0  # 1/minimum_trades_required  # 0.01
+            profit_ratio_penalty_weight = 1
+
+            profit_ratio_factor = pr_weight * profit_ratio
+            percent_gain_factor = pg_weight * total_percent_gain
+            variance_factor = var_weight * variance_of_returns
+
             total_num_trades_penalty = 0
             profit_ratio_penalty = 0
-
-            profit_ratio_factor = (pr_weight * profitable_ratio)
-            percent_gain_factor = (gain_weight * total_percent_gain)
-            variance_factor = (var_weight * variance_of_returns)
 
             # Penalty if minimum number of trades is not met
             if total_num_trades < minimum_trades_required:
@@ -232,21 +229,36 @@ class SignalOptimizer:
                 total_num_trades_penalty = difference_ratio*total_trade_penalty_weight
 
             # Penalty if profit ratio is not met
-            if profitable_ratio < target_profit_ratio:
-                diff_from_target = target_profit_ratio - profitable_ratio
-                profit_ratio_penalty = diff_from_target*profit_ratio_penalty_weight # min(np.exp(diff_from_target), 1E9)
+            if profit_ratio < target_profit_ratio:
+                diff_from_target = target_profit_ratio - profit_ratio
+                profit_ratio_penalty = diff_from_target*profit_ratio_penalty_weight  # min(np.exp(diff_from_target), 1E9)
 
-            objective_function = pow(profit_ratio_factor * percent_gain_factor, 1) - variance_factor - total_num_trades_penalty - profit_ratio_penalty
+            objective_function = (profit_ratio_factor * percent_gain_factor) - variance_factor - total_num_trades_penalty - profit_ratio_penalty
 
-            print(f"ObjFun, PR, PG, VarP, NumTradeP, PRP: {objective_function:8.2f}, {profit_ratio_factor:8.2f}, {percent_gain_factor:8.2f}, {variance_factor:8.2f}, {total_num_trades_penalty:8.2f}, {profit_ratio_penalty:8.2f}")
+            print(f"OF, PR, PG, VarP, #TrdP, PRP: {objective_function:8.2f}, {profit_ratio_factor:8.2f}, {percent_gain_factor:8.2f}, {variance_factor:8.2f}, {total_num_trades_penalty:8.2f}, {profit_ratio_penalty:8.2f}")
         else:
             objective_function = -1E9
-        return objective_function, buy_points, sell_points, total_percent_gain, profitable_trades
+        return objective_function, buy_points, sell_points, total_percent_gain, profit_ratio
 
     def evaluate_wrapper(self, params):
         performance, buy_points, sell_points, _, _,  = self.evaluate_performance(**params)
         self.param_to_results[str(params)] = (buy_points, sell_points)
         return performance
+
+    def generate_lhs_samples(self, pbounds, num_samples):
+        num_params = len(pbounds)
+        # Generate LHS samples within [0, 1]
+        lhs_samples = lhs(num_params, samples=num_samples)
+
+        samples = []
+        for i in range(num_samples):
+            sample = {}
+            for param_idx, (key, (min_val, max_val)) in enumerate(pbounds.items()):
+                # Scale each sample to the parameter's range
+                sample[key] = min_val + (max_val - min_val) * lhs_samples[i, param_idx]
+            samples.append(sample)
+
+        return samples
 
     def optimize(self):
         global INTERRUPTED
@@ -258,7 +270,7 @@ class SignalOptimizer:
             verbose=2
         )
         utility = UtilityFunction(kind="ucb", kappa=2.5, xi=0.0)
-        init_points = [optimizer.suggest(utility) for _ in range(self.init_points)]
+        init_points = self.generate_lhs_samples(self.PBOUNDS, self.init_points)
 
         batch_size = self.number_of_cores
         num_batches = ceil(len(init_points) / batch_size)
@@ -289,6 +301,7 @@ class SignalOptimizer:
             print("\nOptimization interrupted by user. Proceeding with results obtained so far.")
         try:
             # Sequential Bayesian optimization
+            pbar_counter = 0
             top_performance = 0
             with tqdm(total=self.iter_points, desc=f"Optimizing {self.filepath}") as pbar:
                 for _ in range(self.iter_points):
@@ -296,12 +309,14 @@ class SignalOptimizer:
                         print("Ctrl+C, breaking out of initial processing.")
                         break  # Exit the loop if an interruption was signaled
                     next_params = optimizer.suggest(utility)
-                    performance, buy_points, sell_points, total_percent_gain, profitable_trades = self.evaluate_performance(**next_params)
+                    performance, buy_points, sell_points, total_percent_gain, profit_ratio = self.evaluate_performance(**next_params)
                     optimizer.register(params=next_params, target=performance)
-                    pbar.update(1)
+                    pbar_counter += 1
+                    if pbar_counter % 100 == 0:
+                        pbar.update(100)
                     if performance > top_performance:
                         top_performance = performance
-                        print(f"New top performance: {performance:.2f}, Positive trades: {profitable_trades}, Total percent gain: {total_percent_gain:.2f}")
+                        print(f"New top performance: {performance:.2f}, Profit Ratio: {profit_ratio}, Total percent gain: {total_percent_gain:.2f}")
                         #  self.plot_trades(buy_points, sell_points)
 
         except KeyboardInterrupt:
@@ -398,12 +413,12 @@ def run_optimization(filename, pbounds, number_of_cores, start_date, end_date, i
 
     if top_results:
         best_params = top_results[0]['params']
-        final_performance, final_buy_points, final_sell_points, total_percent_gain, profitable_trades = optimizer.evaluate_performance(**best_params)
+        final_performance, final_buy_points, final_sell_points, total_percent_gain, profit_ratio = optimizer.evaluate_performance(**best_params)
 
         print(f"Optimized Indicator Parameters: {best_params}")
-        print(f"Best Performance: {top_results[0]['target']}")
-        print(f"Number of Profitable Trades: {profitable_trades}")
-        print(f"Percent Gain For Optimal Value: {total_percent_gain}")
+        print(f"Best Performance: {final_performance}")
+        print(f"Profit Ratio: {profit_ratio}")
+        print(f"Percent Gain: {total_percent_gain}")
 
         optimizer.visualize_top_results()
         optimizer.plot_trades(final_buy_points, final_sell_points)
