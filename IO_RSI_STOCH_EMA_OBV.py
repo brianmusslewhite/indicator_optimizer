@@ -210,8 +210,8 @@ class SignalOptimizer:
             profit_ratio = profitable_trades / total_num_trades
             target_profit_ratio = 1
 
-            pr_weight = 1
-            var_weight = 0 * 0.01 * 1E8
+            pr_weight = 0
+            var_weight = 1 * 0.001 * 1E8
             pg_weight = 1
             total_trade_penalty_weight = 0  # 1/minimum_trades_required  # 0.01
             profit_ratio_penalty_weight = 1
@@ -233,7 +233,7 @@ class SignalOptimizer:
                 diff_from_target = target_profit_ratio - profit_ratio
                 profit_ratio_penalty = diff_from_target*profit_ratio_penalty_weight  # min(np.exp(diff_from_target), 1E9)
 
-            objective_function = (profit_ratio_factor * percent_gain_factor) - variance_factor - total_num_trades_penalty - profit_ratio_penalty
+            objective_function = (profit_ratio_factor + percent_gain_factor) - variance_factor - total_num_trades_penalty - profit_ratio_penalty
 
             print(f"OF, PR, PG, VarP, #TrdP, PRP: {objective_function:8.2f}, {profit_ratio_factor:8.2f}, {percent_gain_factor:8.2f}, {variance_factor:8.2f}, {total_num_trades_penalty:8.2f}, {profit_ratio_penalty:8.2f}")
         else:
