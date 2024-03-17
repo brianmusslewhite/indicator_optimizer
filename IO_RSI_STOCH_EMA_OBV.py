@@ -50,6 +50,8 @@ class SignalOptimizer:
         self.param_to_results = {}
         self.total_percent_gain = 0
 
+        self.min_desired_trade_frequency_days = 7
+
     def load_and_prepare_data(self):
         processed_data_path = os.path.join('Processed Data', self.filepath)
 
@@ -76,7 +78,6 @@ class SignalOptimizer:
 
         match = re.search(r"(\d+)min", self.filepath)
         self.data_frequency_in_minutes = int(match.group(1)) if match else None
-        self.desired_trade_frequency_days = 4
 
         self.data.ffill(inplace=True)
         self.data.reset_index(inplace=True)
@@ -173,7 +174,7 @@ class SignalOptimizer:
                 signals_met += 1
 
             # Logic for opening position
-            if signals_met >= 3 and not position_open:
+            if signals_met >= 4 and not position_open:
                 buy_points.append(self.data.index[i])
                 position_open = True
                 entry_price = current_price
@@ -222,14 +223,17 @@ class SignalOptimizer:
         if total_num_trades > 0:
             profitable_trades = np.sum(returns > 0)
             variance_of_returns = np.var(returns)
-            minimum_trades_required = len(self.data) / self.desired_trade_frequency_days
-            profit_ratio = profitable_trades / total_num_trades
-            target_profit_ratio = 1
 
-            pr_weight = 0
-            var_weight = 1 * 0.001 * 1E8
+            length_of_data_days = ((len(self.data) * self.data_frequency_in_minutes) / (60*24))
+            minimum_trades_required = length_of_data_days / self.min_desired_trade_frequency_days
+
+            profit_ratio = profitable_trades / total_num_trades
+            min_target_profit_ratio = 0.8
+
+            pr_weight = 1
+            var_weight = 0 * 0.001 * 1E8
             pg_weight = 1
-            total_trade_penalty_weight = 1/minimum_trades_required  # 0.01
+            total_trade_penalty_weight = 1
             profit_ratio_penalty_weight = 1
 
             profit_ratio_factor = pr_weight * profit_ratio
@@ -245,15 +249,16 @@ class SignalOptimizer:
                 total_num_trades_penalty = difference_ratio*total_trade_penalty_weight
 
             # Penalty if profit ratio is not met
-            if profit_ratio < target_profit_ratio:
-                diff_from_target = target_profit_ratio - profit_ratio
-                profit_ratio_penalty = diff_from_target*profit_ratio_penalty_weight  # min(np.exp(diff_from_target), 1E9)
+            if profit_ratio < min_target_profit_ratio:
+                diff_from_target = min_target_profit_ratio - profit_ratio
+                profit_ratio_penalty = profit_ratio_penalty_weight * min(np.exp(5*diff_from_target), 1E9)  # diff_from_target*profit_ratio_penalty_weight  # 
 
             objective_function = (profit_ratio_factor + percent_gain_factor) - variance_factor - total_num_trades_penalty - profit_ratio_penalty
 
-            print(f"OF, PR, PG, VarP, #TrdP, PRP: {objective_function:8.2f}, {profit_ratio_factor:8.2f}, {percent_gain_factor:8.2f}, {variance_factor:8.2f}, {total_num_trades_penalty:8.2f}, {profit_ratio_penalty:8.2f}")
+            print(f"OF: {objective_function:7.2f}, PR: {profit_ratio_factor:7.2f}, PG: {percent_gain_factor:7.2f}, VarP: {variance_factor:7.2f}, #TrdP: {total_num_trades_penalty:7.2f}, PRP: {profit_ratio_penalty:7.2f}")
         else:
             objective_function = -1E9
+            print("No Trades!")
         return objective_function, buy_points, sell_points, total_percent_gain, profit_ratio
 
     def evaluate_wrapper(self, params):
