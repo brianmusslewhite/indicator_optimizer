@@ -157,7 +157,6 @@ class SignalOptimizer:
 
             if rsi.iloc[i] < rsi_thr:
                 signals_met += 1
-
             if fast_ema.iloc[i] > slow_ema.iloc[i] and fast_ema.iloc[i-1] <= slow_ema.iloc[i-1] and short_ema_p < long_ema_p:
                 signals_met += 1
                 ema_signal_active = True
@@ -167,11 +166,10 @@ class SignalOptimizer:
                 signals_met += 1
                 if ema_signal_counter > ema_persistence:
                     ema_signal_active = False
-
             if stoch_avg.iloc[i] <= stoch_thr:
                 signals_met += 1
-            # if obv_ema_values.iloc[i] > obv_ema_values.iloc[i-1]:
-            #     signals_met += 1
+            if obv_ema_values.iloc[i] > obv_ema_values.iloc[i-1]:
+                signals_met += 1
 
             # Logic for opening position
             if signals_met >= 3 and not position_open:
@@ -230,7 +228,7 @@ class SignalOptimizer:
             profit_ratio = profitable_trades / total_num_trades
             min_target_profit_ratio = 0.9
 
-            pr_weight = 1
+            pr_weight = 0
             var_weight = 0 * 0.001 * 1E8
             pg_weight = 1
             total_trade_penalty_weight = 1
@@ -251,7 +249,7 @@ class SignalOptimizer:
             # Penalty if profit ratio is not met
             if profit_ratio < min_target_profit_ratio:
                 diff_from_target = min_target_profit_ratio - profit_ratio
-                profit_ratio_penalty = profit_ratio_penalty_weight * min(np.exp(7*diff_from_target), 1E9)  # diff_from_target*profit_ratio_penalty_weight  # 
+                profit_ratio_penalty = profit_ratio_penalty_weight * min(np.exp(diff_from_target), 1E9)  # diff_from_target*profit_ratio_penalty_weight  # 
 
             objective_function = (profit_ratio_factor + percent_gain_factor) - variance_factor - total_num_trades_penalty - profit_ratio_penalty
 
@@ -288,7 +286,7 @@ class SignalOptimizer:
             f=None,
             pbounds=self.PBOUNDS,
             random_state=1,
-            verbose=2
+            verbose=2,
             allow_duplicate_points=True
         )
         utility = UtilityFunction(kind="ucb", kappa=2.5, xi=0.0)
