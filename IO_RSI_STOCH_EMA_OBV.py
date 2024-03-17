@@ -14,8 +14,8 @@ from math import ceil
 from tqdm import tqdm
 from pyDOE import lhs
 
-
-MAX_HOLD_TIME = (60*24)*3  # in minutes
+MINUTES_IN_DAY = 1440
+MAX_HOLD_TIME = MINUTES_IN_DAY * 3  # in minutes
 INTERRUPTED = False
 
 
@@ -91,10 +91,9 @@ class SignalOptimizer:
         coeffs = [coeffs[0]] + [np.zeros_like(c) for c in coeffs[1:]]  # Keep only approximation coefficients
         reconstructed_signal = pywt.waverec(coeffs, wavelet, mode=mode)
 
-        # Ensure the reconstructed signal is the same length as the input data
         reconstructed_signal = reconstructed_signal[:len(data)]
 
-        return pd.Series(reconstructed_signal, index=self.data.index[:len(reconstructed_signal)])  # Adjust the index
+        return pd.Series(reconstructed_signal, index=self.data.index[:len(reconstructed_signal)])
 
     def calculate_rsi(self, rsi_period, rsi_threshold):
         rsi_period = int(rsi_period)
@@ -130,7 +129,7 @@ class SignalOptimizer:
         obv_ema = pd.Series(obv).ewm(span=ema_period, adjust=False).mean()
         return obv_ema
 
-    def evaluate_performance(self, rsi_p, rsi_thr, short_ema_p, long_ema_p, ema_persistence, stoch_k_p, stoch_slow_k_p, stoch_slow_d_p, stoch_thr, obv_ema_p, arm_pct, arm_stp_ls_pct, stp_ls_pct):
+    def evaluate_performance(self, rsi_p, rsi_thr, short_ema_p, long_ema_p, ema_persist, stoch_k_p, stoch_slow_k_p, stoch_slow_d_p, stoch_thr, obv_ema_p, obv_persist, arm_pct, arm_stp_ls_pct, stp_ls_pct):
         rsi, _ = self.calculate_rsi(rsi_p, rsi_thr)
         fast_ema, slow_ema = self.calculate_ema(short_ema_p, long_ema_p)
         stoch_avg = self.calculate_stochastic_oscillator(stoch_k_p, stoch_slow_k_p, stoch_slow_d_p)
@@ -150,6 +149,8 @@ class SignalOptimizer:
 
         ema_signal_active = False
         ema_signal_counter = 0
+        obv_signal_active = False
+        obv_signal_counter = 0
 
         for i in range(1, len(self.data)):
             current_price = self.data['close'].iloc[i]
@@ -164,15 +165,22 @@ class SignalOptimizer:
             elif ema_signal_active:
                 ema_signal_counter += 1
                 signals_met += 1
-                if ema_signal_counter > ema_persistence:
+                if ema_signal_counter >= ema_persist:
                     ema_signal_active = False
             if stoch_avg.iloc[i] <= stoch_thr:
                 signals_met += 1
             if obv_ema_values.iloc[i] > obv_ema_values.iloc[i-1]:
                 signals_met += 1
+                obv_signal_active = True
+                obv_signal_counter = 0
+            elif obv_signal_active:
+                obv_signal_counter += 1
+                signals_met += 1
+                if obv_signal_counter >= obv_persist:
+                    obv_signal_active = False
 
             # Logic for opening position
-            if signals_met >= 3 and not position_open:
+            if signals_met >= 4 and not position_open:
                 buy_points.append(self.data.index[i])
                 position_open = True
                 entry_price = current_price
@@ -221,42 +229,24 @@ class SignalOptimizer:
         if total_num_trades > 0:
             profitable_trades = np.sum(returns > 0)
             variance_of_returns = np.var(returns)
-
-            length_of_data_days = ((len(self.data) * self.data_frequency_in_minutes) / (60*24))
+            length_of_data_days = (len(self.data) * self.data_frequency_in_minutes) / MINUTES_IN_DAY
             minimum_trades_required = length_of_data_days / self.min_desired_trade_frequency_days
-
             profit_ratio = profitable_trades / total_num_trades
-            min_target_profit_ratio = 0.9
-
-            pr_weight = 0
-            var_weight = 0 * 0.001 * 1E8
-            pg_weight = 1
-            total_trade_penalty_weight = 1
-            profit_ratio_penalty_weight = 1
+            min_target_profit_ratio, pr_weight, var_weight, pg_weight = 0.8, 1, 0, 1
+            total_trade_penalty_weight, profit_ratio_penalty_weight = 1, 1
 
             profit_ratio_factor = pr_weight * profit_ratio
             percent_gain_factor = pg_weight * total_percent_gain
             variance_factor = var_weight * variance_of_returns
 
-            total_num_trades_penalty = 0
-            profit_ratio_penalty = 0
+            total_num_trades_penalty = total_trade_penalty_weight * min(np.exp((minimum_trades_required - total_num_trades) / total_num_trades / 5), 1E9) if total_num_trades < minimum_trades_required else 0
+            profit_ratio_penalty = profit_ratio_penalty_weight * min(np.exp(min_target_profit_ratio - profit_ratio), 1E9) if profit_ratio < min_target_profit_ratio else 0
 
-            # Penalty if minimum number of trades is not met
-            if total_num_trades < minimum_trades_required:
-                difference_ratio = (minimum_trades_required - total_num_trades) / total_num_trades
-                total_num_trades_penalty = total_trade_penalty_weight * min(np.exp(difference_ratio/5), 1E9)
-
-            # Penalty if profit ratio is not met
-            if profit_ratio < min_target_profit_ratio:
-                diff_from_target = min_target_profit_ratio - profit_ratio
-                profit_ratio_penalty = profit_ratio_penalty_weight * min(np.exp(diff_from_target), 1E9)  # diff_from_target*profit_ratio_penalty_weight  # 
-
-            objective_function = (profit_ratio_factor + percent_gain_factor) - variance_factor - total_num_trades_penalty - profit_ratio_penalty
-
+            objective_function = profit_ratio_factor + percent_gain_factor - variance_factor - total_num_trades_penalty - profit_ratio_penalty
             print(f"OF:{objective_function:8.2f}, PR,PG:{profit_ratio_factor:6.2f},{percent_gain_factor:6.2f}, VarP,#TrdP,PRP:{variance_factor:7.2f},{total_num_trades_penalty:7.2f},{profit_ratio_penalty:7.2f}")
         else:
             objective_function = -1E9
-            print("No Trades!")
+            # print("No Trades!")
         return objective_function, buy_points, sell_points, total_percent_gain, profit_ratio
 
     def evaluate_wrapper(self, params):
@@ -300,7 +290,7 @@ class SignalOptimizer:
                 for batch_idx in range(num_batches):
                     if INTERRUPTED:
                         print("Ctrl+C, breaking out of initial processing.")
-                        break  # Exit the loop if an interruption was signaled
+                        break
                     start_idx = batch_idx * batch_size
                     end_idx = min(start_idx + batch_size, len(init_points))
                     batch_points = init_points[start_idx:end_idx]
@@ -310,12 +300,13 @@ class SignalOptimizer:
                         delayed(self.evaluate_wrapper)(params) for params in batch_points
                     )
 
-                    # Register the results of each batch
                     for idx, performance in enumerate(batch_results):
-                        optimizer.register(params=batch_points[idx], target=performance)
+                        if performance != -1E9:
+                            optimizer.register(params=batch_points[idx], target=performance)
 
                     # Update tqdm with the number of points processed in this batch
                     pbar.update(len(batch_points))
+                    print("\n")
 
         except KeyboardInterrupt:
             print("\nOptimization interrupted by user. Proceeding with results obtained so far.")
@@ -327,7 +318,7 @@ class SignalOptimizer:
                 for _ in range(self.iter_points):
                     if INTERRUPTED:
                         print("Ctrl+C, breaking out of initial processing.")
-                        break  # Exit the loop if an interruption was signaled
+                        break
                     next_params = optimizer.suggest(utility)
                     performance, buy_points, sell_points, total_percent_gain, profit_ratio = self.evaluate_performance(**next_params)
                     optimizer.register(params=next_params, target=performance)
@@ -337,7 +328,6 @@ class SignalOptimizer:
                     if performance > top_performance:
                         top_performance = performance
                         print(f"New top performance: {performance:.2f}, Profit Ratio: {profit_ratio}, Total percent gain: {total_percent_gain:.2f}")
-                        #  self.plot_trades(buy_points, sell_points)
 
         except KeyboardInterrupt:
             print("\nOptimization interrupted by user. Proceeding with results obtained so far.")
@@ -365,7 +355,7 @@ class SignalOptimizer:
 
         filename = f"{self.dataset_name}_PairPlot_{self.start_date}_to_{self.end_date}_Date_{self.time_now}.png"
         plt.savefig(os.path.join(self.plot_subfolder, filename))
-        plt.show()
+        # plt.show()
 
     def plot_trades(self, buy_points, sell_points):
         plt.figure(figsize=(14, 7))
@@ -409,6 +399,8 @@ def parse_args():
     # OBV EMA Parameters
     parser.add_argument("--obv_ema_period_min", type=int, default=3, help="Minimum OBV EMA period")
     parser.add_argument("--obv_ema_period_max", type=int, default=10, help="Maximum OBV EMA period")
+    parser.add_argument("--obv_persistence_min", type=int, default=1, help="Minimum OBV persistence")
+    parser.add_argument("--obv_persistence_max", type=int, default=4, help="Maximum OBV persistence")
     # Sell Parameters
     parser.add_argument("--arming_pct_min", type=float, default=0.6, help="Minimum arming percentage for stop loss")
     parser.add_argument("--arming_pct_max", type=float, default=1.5, help="Maximum arming percentage for stop loss")
@@ -452,12 +444,13 @@ if __name__ == "__main__":
         'rsi_thr': (args.rsi_threshold_min, args.rsi_threshold_max),
         'short_ema_p': (args.ema_short_period_min, args.ema_short_period_max),
         'long_ema_p': (args.ema_long_period_min, args.ema_long_period_max),
-        'ema_persistence': (args.ema_persistence_min, args.ema_persistence_max),
+        'ema_persist': (args.ema_persistence_min, args.ema_persistence_max),
         'stoch_k_p': (args.stoch_k_period_min, args.stoch_k_period_max),
         'stoch_slow_k_p': (args.stoch_slowing_min, args.stoch_slowing_max),
         'stoch_slow_d_p': (args.stoch_d_period_min, args.stoch_d_period_max),
         'stoch_thr': (args.stoch_k_period_min, args.stoch_k_period_max),
         'obv_ema_p': (args.obv_ema_period_min, args.obv_ema_period_max),
+        'obv_persist': (args.obv_persistence_min, args.obv_persistence_max),
         'arm_pct': (args.arming_pct_min, args.arming_pct_max),
         'arm_stp_ls_pct': (args.arm_stop_loss_pct_min, args.arm_stop_loss_pct_max),
         'stp_ls_pct': (args.stop_loss_pct_min, args.stop_loss_pct_max)

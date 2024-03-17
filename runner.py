@@ -11,26 +11,27 @@ elif os_name == "Windows":
 configs = [
     ("ETHXBT_15min_Kraken.csv", {
         'start_date': '2023-11-1', 'end_date': '2023-12-31',
-        'init_points': 500, 'iter_points': 2000,
+        'init_points': 20000, 'iter_points': 1000,
         'pair_points': 500,
-        'rsi_period_min': 2, 'rsi_period_max': 20,
-        'rsi_threshold_min': 15, 'rsi_threshold_max': 50,
+        'rsi_period_min': 2, 'rsi_period_max': 30,
+        'rsi_threshold_min': 10, 'rsi_threshold_max': 40,
         'ema_short_period_min': 2, 'ema_short_period_max': 20,
-        'ema_long_period_min': 3, 'ema_long_period_max': 45,
-        'ema_persistence_min': 1, 'ema_persistence_max': 6,
-        'stoch_k_period_min': 4, 'stoch_k_period_max': 25,
-        'stoch_d_period_min': 3, 'stoch_d_period_max': 8,
-        'stoch_slowing_min': 3, 'stoch_slowing_max': 8,
-        'obv_ema_period_min': 1, 'obv_ema_period_max': 15,
-        'arming_pct_min': 0.2, 'arming_pct_max': 1.0,
-        'arm_stop_loss_pct_min': 0.05, 'arm_stop_loss_pct_max': 0.2,
-        'stop_loss_pct_min': 1, 'stop_loss_pct_max': 3
+        'ema_long_period_min': 8, 'ema_long_period_max': 50,
+        'ema_persistence_min': 1, 'ema_persistence_max': 7,
+        'stoch_k_period_min': 4, 'stoch_k_period_max': 20,
+        'stoch_d_period_min': 2, 'stoch_d_period_max': 10,
+        'stoch_slowing_min': 2, 'stoch_slowing_max': 8,
+        'obv_ema_period_min': 1, 'obv_ema_period_max': 20,
+        'obv_persistence_min': 1, 'obv_persistence_max': 7,
+        'arming_pct_min': 0.9, 'arming_pct_max': 1.3,
+        'arm_stop_loss_pct_min': 0.1, 'arm_stop_loss_pct_max': 0.3,
+        'stop_loss_pct_min': 1, 'stop_loss_pct_max': 2
     }),
 
 ]
 
 num_cpu_cores = multiprocessing.cpu_count()
-n_jobs =  max(1, num_cpu_cores // len(configs))
+n_jobs = max(1, num_cpu_cores // len(configs))*20
 
 
 for filename, inputs in configs:
@@ -55,6 +56,8 @@ for filename, inputs in configs:
         '--stoch_slowing_max', str(inputs['stoch_slowing_max']),
         '--obv_ema_period_min', str(inputs['obv_ema_period_min']),
         '--obv_ema_period_max', str(inputs['obv_ema_period_max']),
+        '--obv_persistence_min', str(inputs['obv_persistence_min']),
+        '--obv_persistence_max', str(inputs['obv_persistence_max']),
         '--arming_pct_min', str(inputs['arming_pct_min']),
         '--arming_pct_max', str(inputs['arming_pct_max']),
         '--arm_stop_loss_pct_min', str(inputs['arm_stop_loss_pct_min']),
