@@ -15,7 +15,7 @@ from tqdm import tqdm
 from pyDOE import lhs
 
 MINUTES_IN_DAY = 1440
-MAX_HOLD_TIME = MINUTES_IN_DAY * 3  # in minutes
+MAX_HOLD_TIME_MINUTES = MINUTES_IN_DAY * 2
 INTERRUPTED = False
 
 
@@ -50,7 +50,7 @@ class SignalOptimizer:
         self.param_to_results = {}
         self.total_percent_gain = 0
 
-        self.min_desired_trade_frequency_days = 7
+        self.min_desired_trade_frequency_days = 4
 
     def load_and_prepare_data(self):
         processed_data_path = os.path.join('Processed Data', self.filepath)
@@ -190,7 +190,7 @@ class SignalOptimizer:
             # Logic for closing position
             if position_open:
                 holding_time = i - entry_index
-                max_holding_time_reached = holding_time >= (MAX_HOLD_TIME / self.data_frequency_in_minutes)
+                max_holding_time_reached = holding_time >= (MAX_HOLD_TIME_MINUTES / self.data_frequency_in_minutes)
 
                 # Stop loss
                 if current_price <= entry_price * (1 - stp_ls_pct / 100):
@@ -232,7 +232,7 @@ class SignalOptimizer:
             length_of_data_days = (len(self.data) * self.data_frequency_in_minutes) / MINUTES_IN_DAY
             minimum_trades_required = length_of_data_days / self.min_desired_trade_frequency_days
             profit_ratio = profitable_trades / total_num_trades
-            min_target_profit_ratio, pr_weight, var_weight, pg_weight = 0.8, 1, 0, 1
+            min_target_profit_ratio, pr_weight, var_weight, pg_weight = 0.7, 1, 0, 1
             total_trade_penalty_weight, profit_ratio_penalty_weight = 1, 1
 
             profit_ratio_factor = pr_weight * profit_ratio
