@@ -10,8 +10,8 @@ elif os_name == "Windows":
 
 configs = [
     ("ETHXBT_15min_Kraken.csv", {
-        'start_date': '2023-6-1', 'end_date': '2023-12-31',
-        'init_points': 1500, 'iter_points': 1000,
+        'start_date': '2023-11-1', 'end_date': '2023-12-31',
+        'init_points': 100, 'iter_points': 1000,
         'pair_points': 500,
         'rsi_period_min': 2, 'rsi_period_max': 20,
         'rsi_threshold_min': 15, 'rsi_threshold_max': 50,

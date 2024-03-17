@@ -170,11 +170,11 @@ class SignalOptimizer:
 
             if stoch_avg.iloc[i] <= stoch_thr:
                 signals_met += 1
-            if obv_ema_values.iloc[i] > obv_ema_values.iloc[i-1]:
-                signals_met += 1
+            # if obv_ema_values.iloc[i] > obv_ema_values.iloc[i-1]:
+            #     signals_met += 1
 
             # Logic for opening position
-            if signals_met >= 4 and not position_open:
+            if signals_met >= 3 and not position_open:
                 buy_points.append(self.data.index[i])
                 position_open = True
                 entry_price = current_price
@@ -228,7 +228,7 @@ class SignalOptimizer:
             minimum_trades_required = length_of_data_days / self.min_desired_trade_frequency_days
 
             profit_ratio = profitable_trades / total_num_trades
-            min_target_profit_ratio = 0.8
+            min_target_profit_ratio = 0.9
 
             pr_weight = 1
             var_weight = 0 * 0.001 * 1E8
@@ -246,16 +246,16 @@ class SignalOptimizer:
             # Penalty if minimum number of trades is not met
             if total_num_trades < minimum_trades_required:
                 difference_ratio = (minimum_trades_required - total_num_trades) / total_num_trades
-                total_num_trades_penalty = difference_ratio*total_trade_penalty_weight
+                total_num_trades_penalty = total_trade_penalty_weight * min(np.exp(difference_ratio/5), 1E9)
 
             # Penalty if profit ratio is not met
             if profit_ratio < min_target_profit_ratio:
                 diff_from_target = min_target_profit_ratio - profit_ratio
-                profit_ratio_penalty = profit_ratio_penalty_weight * min(np.exp(5*diff_from_target), 1E9)  # diff_from_target*profit_ratio_penalty_weight  # 
+                profit_ratio_penalty = profit_ratio_penalty_weight * min(np.exp(7*diff_from_target), 1E9)  # diff_from_target*profit_ratio_penalty_weight  # 
 
             objective_function = (profit_ratio_factor + percent_gain_factor) - variance_factor - total_num_trades_penalty - profit_ratio_penalty
 
-            print(f"OF: {objective_function:7.2f}, PR: {profit_ratio_factor:7.2f}, PG: {percent_gain_factor:7.2f}, VarP: {variance_factor:7.2f}, #TrdP: {total_num_trades_penalty:7.2f}, PRP: {profit_ratio_penalty:7.2f}")
+            print(f"OF:{objective_function:8.2f}, PR,PG:{profit_ratio_factor:6.2f},{percent_gain_factor:6.2f}, VarP,#TrdP,PRP:{variance_factor:7.2f},{total_num_trades_penalty:7.2f},{profit_ratio_penalty:7.2f}")
         else:
             objective_function = -1E9
             print("No Trades!")
@@ -288,7 +288,8 @@ class SignalOptimizer:
             f=None,
             pbounds=self.PBOUNDS,
             random_state=1,
-            verbose=2
+            verbose=2,
+            allow_duplicate_points=True
         )
         utility = UtilityFunction(kind="ucb", kappa=2.5, xi=0.0)
         init_points = self.generate_lhs_samples(self.PBOUNDS, self.init_points)
@@ -296,18 +297,19 @@ class SignalOptimizer:
         batch_size = self.number_of_cores
         num_batches = ceil(len(init_points) / batch_size)
 
+        # Initialize parallel processing for batches
         try:
             with tqdm(total=self.init_points, desc=f"Init {self.filepath}") as pbar:
                 for batch_idx in range(num_batches):
                     if INTERRUPTED:
                         print("Ctrl+C, breaking out of initial processing.")
-                        break  # Exit the loop if an interruption was signaled
+                        break
                     start_idx = batch_idx * batch_size
                     end_idx = min(start_idx + batch_size, len(init_points))
                     batch_points = init_points[start_idx:end_idx]
 
                     # Process each batch in parallel
-                    batch_results = Parallel(n_jobs=self.number_of_cores, backend="multiprocessing")(
+                    batch_results = Parallel(n_jobs=batch_size, backend="multiprocessing")(
                         delayed(self.evaluate_wrapper)(params) for params in batch_points
                     )
 
@@ -315,35 +317,32 @@ class SignalOptimizer:
                     for idx, performance in enumerate(batch_results):
                         optimizer.register(params=batch_points[idx], target=performance)
 
-                    # Update tqdm with the number of points processed in this batch
                     pbar.update(len(batch_points))
-
         except KeyboardInterrupt:
             print("\nOptimization interrupted by user. Proceeding with results obtained so far.")
+
         try:
-            # Sequential Bayesian optimization
-            pbar_counter = 0
-            top_performance = 0
+            # Adapted for "batch" optimization
             with tqdm(total=self.iter_points, desc=f"Optimizing {self.filepath}") as pbar:
-                for _ in range(self.iter_points):
+                for i in range(0, self.iter_points, batch_size):
                     if INTERRUPTED:
                         print("Ctrl+C, breaking out of initial processing.")
-                        break  # Exit the loop if an interruption was signaled
-                    next_params = optimizer.suggest(utility)
-                    performance, buy_points, sell_points, total_percent_gain, profit_ratio = self.evaluate_performance(**next_params)
-                    optimizer.register(params=next_params, target=performance)
-                    pbar_counter += 1
-                    if pbar_counter % 100 == 0:
-                        pbar.update(100)
-                    if performance > top_performance:
-                        top_performance = performance
-                        print(f"New top performance: {performance:.2f}, Profit Ratio: {profit_ratio}, Total percent gain: {total_percent_gain:.2f}")
-                        #  self.plot_trades(buy_points, sell_points)
+                        break
+                    next_points = [optimizer.suggest(utility) for _ in range(batch_size)]
+                    batch_results = Parallel(n_jobs=batch_size, backend="multiprocessing")(
+                        delayed(self.evaluate_performance)(**params) for params in next_points
+                    )
+
+                    # Register the results of each batch
+                    for idx, performance in enumerate(batch_results):
+                        optimizer.register(params=next_points[idx], target=performance[0])  # Assuming performance is the first return value
+
+                    pbar.update(batch_size)
 
         except KeyboardInterrupt:
             print("\nOptimization interrupted by user. Proceeding with results obtained so far.")
 
-        # Process and return the results obtained so far, regardless of whether there was an interruption
+        # Process and return the results obtained so far
         sorted_results = sorted(optimizer.res, key=lambda x: x['target'], reverse=True)
         self.top_results = sorted_results[:self.pair_points] if len(sorted_results) >= self.pair_points else sorted_results
         return self.top_results
