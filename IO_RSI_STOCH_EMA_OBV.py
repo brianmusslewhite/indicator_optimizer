@@ -6,6 +6,7 @@ import re
 import seaborn as sns
 import signal
 import os
+import pywt
 from datetime import datetime
 from bayes_opt import BayesianOptimization, UtilityFunction
 from joblib import Parallel, delayed
@@ -14,7 +15,7 @@ from tqdm import tqdm
 from pyDOE import lhs
 
 
-MAX_HOLD_TIME = (60*24)*2  # in minutes
+MAX_HOLD_TIME = (60*24)*3  # in minutes
 INTERRUPTED = False
 
 
@@ -41,7 +42,16 @@ class SignalOptimizer:
         os.makedirs(self.plot_subfolder, exist_ok=True)
         self.time_now = datetime.now().strftime('%Y%m%d_%H%M%S')
 
-        processed_data_path = os.path.join('Processed Data', filepath)
+        self.load_and_prepare_data()
+
+        self.best_buy_points = []
+        self.best_sell_points = []
+        self.best_performance = float('-inf')
+        self.param_to_results = {}
+        self.total_percent_gain = 0
+
+    def load_and_prepare_data(self):
+        processed_data_path = os.path.join('Processed Data', self.filepath)
 
         self.data = pd.read_csv(
             processed_data_path,
@@ -64,17 +74,26 @@ class SignalOptimizer:
         if self.data.empty:
             raise ValueError(f"No data available between {start_date} and {end_date} after adjustments.")
 
-        match = re.search(r"(\d+)min", filepath)
+        match = re.search(r"(\d+)min", self.filepath)
         self.data_frequency_in_minutes = int(match.group(1)) if match else None
         self.desired_trade_frequency_days = 4
 
         self.data.ffill(inplace=True)
         self.data.reset_index(inplace=True)
-        self.best_buy_points = []
-        self.best_sell_points = []
-        self.best_performance = float('-inf')
-        self.param_to_results = {}
-        self.total_percent_gain = 0
+
+        self.data['close_init'] = self.data['close'].copy()
+        self.data['close_transformed'] = self.apply_wavelet_transform(self.data['close'].values)
+        self.data['close'] = self.data['close_transformed'].copy()
+
+    def apply_wavelet_transform(self, data, wavelet='db1', mode='smooth', level=1):
+        coeffs = pywt.wavedec(data, wavelet, mode=mode, level=level)
+        coeffs = [coeffs[0]] + [np.zeros_like(c) for c in coeffs[1:]]  # Keep only approximation coefficients
+        reconstructed_signal = pywt.waverec(coeffs, wavelet, mode=mode)
+
+        # Ensure the reconstructed signal is the same length as the input data
+        reconstructed_signal = reconstructed_signal[:len(data)]
+
+        return pd.Series(reconstructed_signal, index=self.data.index[:len(reconstructed_signal)])  # Adjust the index
 
     def calculate_rsi(self, rsi_period, rsi_threshold):
         rsi_period = int(rsi_period)
@@ -199,12 +218,9 @@ class SignalOptimizer:
         total_num_trades = len(returns)
         returns = np.array(returns)
 
-        if total_num_trades > 0:
-            profitable_trades = np.sum(returns > 0)
-
         # Build objective function
         if total_num_trades > 0:
-
+            profitable_trades = np.sum(returns > 0)
             variance_of_returns = np.var(returns)
             minimum_trades_required = len(self.data) / self.desired_trade_frequency_days
             profit_ratio = profitable_trades / total_num_trades
@@ -213,7 +229,7 @@ class SignalOptimizer:
             pr_weight = 0
             var_weight = 1 * 0.001 * 1E8
             pg_weight = 1
-            total_trade_penalty_weight = 0  # 1/minimum_trades_required  # 0.01
+            total_trade_penalty_weight = 1/minimum_trades_required  # 0.01
             profit_ratio_penalty_weight = 1
 
             profit_ratio_factor = pr_weight * profit_ratio
@@ -349,7 +365,8 @@ class SignalOptimizer:
 
     def plot_trades(self, buy_points, sell_points):
         plt.figure(figsize=(14, 7))
-        plt.plot(self.data['time'], self.data['close'], label='Close Price', alpha=0.5)
+        plt.plot(self.data['time'], self.data['close_init'], label='Close Price', alpha=0.3, color='#7f7f7f')
+        plt.plot(self.data['time'], self.data['close_transformed'], label='Wavelet Transformed Close Price', alpha=0.5, linestyle='--', color='#1f77b4')
 
         plt.scatter(self.data.loc[self.data.index.isin(buy_points), 'time'], self.data.loc[self.data.index.isin(buy_points), 'close'], label='Buy', marker='^', color='green', alpha=1)
         plt.scatter(self.data.loc[self.data.index.isin(sell_points), 'time'], self.data.loc[self.data.index.isin(sell_points), 'close'], label='Sell', marker='v', color='red', alpha=1)
