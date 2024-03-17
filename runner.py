@@ -11,7 +11,7 @@ elif os_name == "Windows":
 configs = [
     ("ETHXBT_15min_Kraken.csv", {
         'start_date': '2023-11-1', 'end_date': '2023-12-31',
-        'init_points': 100, 'iter_points': 1000,
+        'init_points': 500, 'iter_points': 1000,
         'pair_points': 500,
         'rsi_period_min': 2, 'rsi_period_max': 20,
         'rsi_threshold_min': 15, 'rsi_threshold_max': 50,
@@ -186,7 +186,7 @@ configs = [
 ]
 
 num_cpu_cores = multiprocessing.cpu_count()
-n_jobs = max(1, num_cpu_cores // len(configs))
+n_jobs = 4  # max(1, num_cpu_cores // len(configs))
 
 
 for filename, inputs in configs:

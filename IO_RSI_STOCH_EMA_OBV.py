@@ -288,7 +288,7 @@ class SignalOptimizer:
             f=None,
             pbounds=self.PBOUNDS,
             random_state=1,
-            verbose=2,
+            verbose=2
             allow_duplicate_points=True
         )
         utility = UtilityFunction(kind="ucb", kappa=2.5, xi=0.0)
@@ -297,19 +297,18 @@ class SignalOptimizer:
         batch_size = self.number_of_cores
         num_batches = ceil(len(init_points) / batch_size)
 
-        # Initialize parallel processing for batches
         try:
             with tqdm(total=self.init_points, desc=f"Init {self.filepath}") as pbar:
                 for batch_idx in range(num_batches):
                     if INTERRUPTED:
                         print("Ctrl+C, breaking out of initial processing.")
-                        break
+                        break  # Exit the loop if an interruption was signaled
                     start_idx = batch_idx * batch_size
                     end_idx = min(start_idx + batch_size, len(init_points))
                     batch_points = init_points[start_idx:end_idx]
 
                     # Process each batch in parallel
-                    batch_results = Parallel(n_jobs=batch_size, backend="multiprocessing")(
+                    batch_results = Parallel(n_jobs=self.number_of_cores, backend="multiprocessing")(
                         delayed(self.evaluate_wrapper)(params) for params in batch_points
                     )
 
@@ -317,32 +316,35 @@ class SignalOptimizer:
                     for idx, performance in enumerate(batch_results):
                         optimizer.register(params=batch_points[idx], target=performance)
 
+                    # Update tqdm with the number of points processed in this batch
                     pbar.update(len(batch_points))
+
         except KeyboardInterrupt:
             print("\nOptimization interrupted by user. Proceeding with results obtained so far.")
-
         try:
-            # Adapted for "batch" optimization
+            # Sequential Bayesian optimization
+            pbar_counter = 0
+            top_performance = 0
             with tqdm(total=self.iter_points, desc=f"Optimizing {self.filepath}") as pbar:
-                for i in range(0, self.iter_points, batch_size):
+                for _ in range(self.iter_points):
                     if INTERRUPTED:
                         print("Ctrl+C, breaking out of initial processing.")
-                        break
-                    next_points = [optimizer.suggest(utility) for _ in range(batch_size)]
-                    batch_results = Parallel(n_jobs=batch_size, backend="multiprocessing")(
-                        delayed(self.evaluate_performance)(**params) for params in next_points
-                    )
-
-                    # Register the results of each batch
-                    for idx, performance in enumerate(batch_results):
-                        optimizer.register(params=next_points[idx], target=performance[0])  # Assuming performance is the first return value
-
-                    pbar.update(batch_size)
+                        break  # Exit the loop if an interruption was signaled
+                    next_params = optimizer.suggest(utility)
+                    performance, buy_points, sell_points, total_percent_gain, profit_ratio = self.evaluate_performance(**next_params)
+                    optimizer.register(params=next_params, target=performance)
+                    pbar_counter += 1
+                    if pbar_counter % 100 == 0:
+                        pbar.update(100)
+                    if performance > top_performance:
+                        top_performance = performance
+                        print(f"New top performance: {performance:.2f}, Profit Ratio: {profit_ratio}, Total percent gain: {total_percent_gain:.2f}")
+                        #  self.plot_trades(buy_points, sell_points)
 
         except KeyboardInterrupt:
             print("\nOptimization interrupted by user. Proceeding with results obtained so far.")
 
-        # Process and return the results obtained so far
+        # Process and return the results obtained so far, regardless of whether there was an interruption
         sorted_results = sorted(optimizer.res, key=lambda x: x['target'], reverse=True)
         self.top_results = sorted_results[:self.pair_points] if len(sorted_results) >= self.pair_points else sorted_results
         return self.top_results
