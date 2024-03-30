@@ -17,6 +17,7 @@ from pyDOE import lhs
 MINUTES_IN_DAY = 1440
 MAX_HOLD_TIME_MINUTES = MINUTES_IN_DAY * 2
 INTERRUPTED = False
+MIN_DESIRED_TRADE_FREQUENCY_DAYS = 1
 
 
 def signal_handler(signum, frame):
@@ -50,7 +51,7 @@ class SignalOptimizer:
         self.param_to_results = {}
         self.total_percent_gain = 0
 
-        self.min_desired_trade_frequency_days = 4
+        self.min_desired_trade_frequency_days = MIN_DESIRED_TRADE_FREQUENCY_DAYS
 
     def load_and_prepare_data(self):
         processed_data_path = os.path.join('Processed Data', self.filepath)
@@ -243,7 +244,7 @@ class SignalOptimizer:
             profit_ratio_penalty = profit_ratio_penalty_weight * min(np.exp(min_target_profit_ratio - profit_ratio), 1E9) if profit_ratio < min_target_profit_ratio else 0
 
             objective_function = profit_ratio_factor + percent_gain_factor - variance_factor - total_num_trades_penalty - profit_ratio_penalty
-            print(f"OF:{objective_function:8.2f}, PR,PG:{profit_ratio_factor:6.2f},{percent_gain_factor:6.2f}, VarP,#TrdP,PRP:{variance_factor:7.2f},{total_num_trades_penalty:7.2f},{profit_ratio_penalty:7.2f}")
+            print(f"OF:{objective_function:10.2f}, PR,PG:{profit_ratio_factor:6.2f},{percent_gain_factor:6.2f}, VarP,#TrdP,PRP:{variance_factor:8.2f},{total_num_trades_penalty:8.2f},{profit_ratio_penalty:8.2f}")
         else:
             objective_function = -1E9
             # print("No Trades!")
@@ -389,6 +390,8 @@ def parse_args():
     parser.add_argument("--stoch_d_period_max", type=int, default=5, help="Maximum Stochastic %D period")
     parser.add_argument("--stoch_slowing_min", type=int, default=3, help="Minimum Stochastic slowing period")
     parser.add_argument("--stoch_slowing_max", type=int, default=5, help="Maximum Stochastic slowing period")
+    parser.add_argument("--stoch_threshold_min", type=int, default=10, help="Minimum Stoch threshold for oversold condition")
+    parser.add_argument("--stoch_threshold_max", type=int, default=30, help="Maximum Stoch threshold for oversold condition")
     # EMA Parameters for potentially using with OBV or price trends
     parser.add_argument("--ema_short_period_min", type=int, default=12, help="Minimum short EMA period")
     parser.add_argument("--ema_short_period_max", type=int, default=26, help="Maximum short EMA period")
@@ -448,7 +451,7 @@ if __name__ == "__main__":
         'stoch_k_p': (args.stoch_k_period_min, args.stoch_k_period_max),
         'stoch_slow_k_p': (args.stoch_slowing_min, args.stoch_slowing_max),
         'stoch_slow_d_p': (args.stoch_d_period_min, args.stoch_d_period_max),
-        'stoch_thr': (args.stoch_k_period_min, args.stoch_k_period_max),
+        'stoch_thr': (args.stoch_threshold_min, args.stoch_threshold_max),
         'obv_ema_p': (args.obv_ema_period_min, args.obv_ema_period_max),
         'obv_persist': (args.obv_persistence_min, args.obv_persistence_max),
         'arm_pct': (args.arming_pct_min, args.arming_pct_max),

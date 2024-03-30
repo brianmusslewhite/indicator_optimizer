@@ -10,28 +10,49 @@ elif os_name == "Windows":
 
 configs = [
     ("ETHXBT_15min_Kraken.csv", {
-        'start_date': '2023-11-1', 'end_date': '2023-12-31',
-        'init_points': 20000, 'iter_points': 1000,
+        'start_date': '2023-10-1', 'end_date': '2023-12-31',
+        'init_points': 200, 'iter_points': 10000,
         'pair_points': 500,
         'rsi_period_min': 2, 'rsi_period_max': 30,
-        'rsi_threshold_min': 10, 'rsi_threshold_max': 40,
+        'rsi_threshold_min': 5, 'rsi_threshold_max': 50,
         'ema_short_period_min': 2, 'ema_short_period_max': 20,
-        'ema_long_period_min': 8, 'ema_long_period_max': 50,
-        'ema_persistence_min': 1, 'ema_persistence_max': 7,
+        'ema_long_period_min': 5, 'ema_long_period_max': 50,
+        'ema_persistence_min': 1, 'ema_persistence_max': 10,
         'stoch_k_period_min': 4, 'stoch_k_period_max': 20,
         'stoch_d_period_min': 2, 'stoch_d_period_max': 10,
         'stoch_slowing_min': 2, 'stoch_slowing_max': 8,
+        'stoch_threshold_min': 5, 'stoch_threshold_max': 50,
         'obv_ema_period_min': 1, 'obv_ema_period_max': 20,
-        'obv_persistence_min': 1, 'obv_persistence_max': 7,
-        'arming_pct_min': 0.9, 'arming_pct_max': 1.3,
+        'obv_persistence_min': 1, 'obv_persistence_max': 10,
+        'arming_pct_min': 0.7, 'arming_pct_max': 1.4,
         'arm_stop_loss_pct_min': 0.1, 'arm_stop_loss_pct_max': 0.3,
-        'stop_loss_pct_min': 1, 'stop_loss_pct_max': 2
+        'stop_loss_pct_min': 1, 'stop_loss_pct_max': 3
+    }),
+
+    ("MATICXBT_15min_Kraken.csv", {
+        'start_date': '2023-10-1', 'end_date': '2023-12-31',
+        'init_points': 200, 'iter_points': 10000,
+        'pair_points': 500,
+        'rsi_period_min': 2, 'rsi_period_max': 30,
+        'rsi_threshold_min': 5, 'rsi_threshold_max': 50,
+        'ema_short_period_min': 2, 'ema_short_period_max': 20,
+        'ema_long_period_min': 5, 'ema_long_period_max': 50,
+        'ema_persistence_min': 1, 'ema_persistence_max': 8,
+        'stoch_k_period_min': 4, 'stoch_k_period_max': 20,
+        'stoch_d_period_min': 2, 'stoch_d_period_max': 10,
+        'stoch_slowing_min': 2, 'stoch_slowing_max': 8,
+        'stoch_threshold_min': 5, 'stoch_threshold_max': 50,
+        'obv_ema_period_min': 1, 'obv_ema_period_max': 20,
+        'obv_persistence_min': 1, 'obv_persistence_max': 8,
+        'arming_pct_min': 0.7, 'arming_pct_max': 1.4,
+        'arm_stop_loss_pct_min': 0.1, 'arm_stop_loss_pct_max': 0.3,
+        'stop_loss_pct_min': 1, 'stop_loss_pct_max': 3
     }),
 
 ]
 
 num_cpu_cores = multiprocessing.cpu_count()
-n_jobs = max(1, num_cpu_cores // len(configs))*20
+n_jobs = max(1, num_cpu_cores // len(configs))
 
 
 for filename, inputs in configs:
@@ -54,6 +75,8 @@ for filename, inputs in configs:
         '--stoch_d_period_max', str(inputs['stoch_d_period_max']),
         '--stoch_slowing_min', str(inputs['stoch_slowing_min']),
         '--stoch_slowing_max', str(inputs['stoch_slowing_max']),
+        '--stoch_threshold_min', str(inputs['stoch_threshold_min']),
+        '--stoch_threshold_max', str(inputs['stoch_threshold_max']),
         '--obv_ema_period_min', str(inputs['obv_ema_period_min']),
         '--obv_ema_period_max', str(inputs['obv_ema_period_max']),
         '--obv_persistence_min', str(inputs['obv_persistence_min']),
