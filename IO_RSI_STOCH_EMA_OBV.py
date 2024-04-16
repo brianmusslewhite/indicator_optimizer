@@ -233,7 +233,7 @@ class SignalOptimizer:
             length_of_data_days = (len(self.data) * self.data_frequency_in_minutes) / MINUTES_IN_DAY
             minimum_trades_required = length_of_data_days / self.min_desired_trade_frequency_days
             profit_ratio = profitable_trades / total_num_trades
-            min_target_profit_ratio, pr_weight, var_weight, pg_weight = 0.7, 1, 0, 1
+            min_target_profit_ratio, pr_weight, var_weight, pg_weight = 0.7, 1, 0, 10
             total_trade_penalty_weight, profit_ratio_penalty_weight = 1, 1
 
             profit_ratio_factor = pr_weight * profit_ratio
@@ -241,7 +241,7 @@ class SignalOptimizer:
             variance_factor = var_weight * variance_of_returns
 
             total_num_trades_penalty = total_trade_penalty_weight * min(np.exp((minimum_trades_required - total_num_trades) / total_num_trades / 5), 1E9) if total_num_trades < minimum_trades_required else 0
-            profit_ratio_penalty = profit_ratio_penalty_weight * min(np.exp(min_target_profit_ratio - profit_ratio), 1E9) if profit_ratio < min_target_profit_ratio else 0
+            profit_ratio_penalty = profit_ratio_penalty_weight * min(np.exp((min_target_profit_ratio - profit_ratio)*10), 1E9) if profit_ratio < min_target_profit_ratio else 0
 
             objective_function = profit_ratio_factor + percent_gain_factor - variance_factor - total_num_trades_penalty - profit_ratio_penalty
             print(f"OF:{objective_function:10.2f}, PR,PG:{profit_ratio_factor:6.2f},{percent_gain_factor:6.2f}, VarP,#TrdP,PRP:{variance_factor:8.2f},{total_num_trades_penalty:8.2f},{profit_ratio_penalty:8.2f}")
