@@ -9,8 +9,22 @@ elif os_name == "Windows":
     python_version = 'python'
 
 configs = [
-    ("ETHXBT_30min_Kraken.csv", {
-        'start_date': '2023-6-1', 'end_date': '2023-12-31',
+    # ("ETHXBT_30min_Kraken.csv", {
+    #     'start_date': '2023-6-1', 'end_date': '2023-12-31',
+    #     'init_points': 500, 'iter_points': 500,
+    #     'pair_points': 500,
+    #     'stoch_k_period_min': 5, 'stoch_k_period_max': 14,
+    #     'stoch_d_period_min': 3, 'stoch_d_period_max': 8,
+    #     'stoch_slowing_min': 1, 'stoch_slowing_max': 5,
+    #     'stoch_threshold_min': 20, 'stoch_threshold_max': 80,
+    #     'bb_p_min': 1, 'bb_p_max': 40,
+    #     'bb_dev_low_min': 1, 'bb_dev_low_max': 3,
+    #     'bb_dev_up_min': 1, 'bb_dev_up_max': 3,
+    #     'stop_loss_pct_min': 1, 'stop_loss_pct_max': 3
+    # }),
+
+    ("LTCXBT_30min_Kraken.csv", {
+        'start_date': '2023-7-10', 'end_date': '2023-12-31',
         'init_points': 500, 'iter_points': 500,
         'pair_points': 500,
         'stoch_k_period_min': 5, 'stoch_k_period_max': 14,
@@ -22,21 +36,6 @@ configs = [
         'bb_dev_up_min': 1, 'bb_dev_up_max': 3,
         'stop_loss_pct_min': 1, 'stop_loss_pct_max': 3
     }),
-
-    # ("LTCXBT_30min_Kraken.csv", {
-    #     'start_date': '2023-7-10', 'end_date': '2023-12-31',
-    #     'init_points': 300, 'iter_points': 500,
-    #     'pair_points': 500,
-    #     'stoch_k_period_min': 5, 'stoch_k_period_max': 14,
-    #     'stoch_d_period_min': 3, 'stoch_d_period_max': 8,
-    #     'stoch_slowing_min': 1, 'stoch_slowing_max': 5,
-    #     'stoch_threshold_min': 20, 'stoch_threshold_max': 80,
-    #     'bb_p_min': 1, 'bb_p_max': 40,
-    #     'bb_dev_min': 1, 'bb_dev_max': 3,
-    #     'arming_pct_min': 0.4, 'arming_pct_max': 0.4,
-    #     'arm_stop_loss_pct_min': 0.1, 'arm_stop_loss_pct_max': 0.1,
-    #     'stop_loss_pct_min': 2, 'stop_loss_pct_max': 2
-    # }),
 ]
 
 num_cpu_cores = multiprocessing.cpu_count()
