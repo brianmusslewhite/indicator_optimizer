@@ -93,7 +93,7 @@ class SignalOptimizer:
         lower_band = sma - (std * deviation_lower)
         return upper_band, lower_band
 
-    def evaluate_performance(self, stoch_k_p, stoch_slow_k_p, stoch_slow_d_p, stoch_thr, bb_p, bb_dev_low, bb_dev_up, arm_pct, arm_stp_ls_pct, stp_ls_pct):
+    def evaluate_performance(self, stoch_k_p, stoch_slow_k_p, stoch_slow_d_p, stoch_thr, bb_p, bb_dev_low, bb_dev_up, stp_ls_pct):
         stoch_avg = self.calculate_stochastic_oscillator(stoch_k_p, stoch_slow_k_p, stoch_slow_d_p)
         upper_band, lower_band = self.calculate_bollinger_bands(bb_p, bb_dev_low, bb_dev_up)
 
@@ -219,10 +219,6 @@ def parse_args():
     parser.add_argument("--bb_dev_up_min", type=float, default=1.5, help="Minimum Bollinger Bands deviation")
     parser.add_argument("--bb_dev_up_max", type=float, default=2.5, help="Maximum Bollinger Bands deviation")
     # Sell Parameters
-    parser.add_argument("--arming_pct_min", type=float, default=0.6, help="Minimum arming percentage for stop loss")
-    parser.add_argument("--arming_pct_max", type=float, default=1.5, help="Maximum arming percentage for stop loss")
-    parser.add_argument("--arm_stop_loss_pct_min", type=float, default=0.1, help="Minimum stop loss percentage after arming")
-    parser.add_argument("--arm_stop_loss_pct_max", type=float, default=0.3, help="Maximum stop loss percentage after arming")
     parser.add_argument("--stop_loss_pct_min", type=float, default=1, help="Minimum stop loss percentage")
     parser.add_argument("--stop_loss_pct_max", type=float, default=2, help="Maximum stop loss percentage")
     # Inputs
@@ -262,8 +258,6 @@ if __name__ == "__main__":
         'bb_p': (args.bb_period_min, args.bb_period_max),
         'bb_dev_low': (args.bb_dev_low_min, args.bb_dev_low_max),
         'bb_dev_up': (args.bb_dev_up_min, args.bb_dev_up_max),
-        'arm_pct': (args.arming_pct_min, args.arming_pct_max),
-        'arm_stp_ls_pct': (args.arm_stop_loss_pct_min, args.arm_stop_loss_pct_max),
         'stp_ls_pct': (args.stop_loss_pct_min, args.stop_loss_pct_max)
     }
 

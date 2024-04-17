@@ -20,8 +20,6 @@ configs = [
         'bb_p_min': 1, 'bb_p_max': 40,
         'bb_dev_low_min': 1, 'bb_dev_low_max': 3,
         'bb_dev_up_min': 1, 'bb_dev_up_max': 3,
-        'arming_pct_min': 0.4, 'arming_pct_max': 1,
-        'arm_stop_loss_pct_min': 0.1, 'arm_stop_loss_pct_max': 0.4,
         'stop_loss_pct_min': 1, 'stop_loss_pct_max': 3
     }),
 
@@ -63,10 +61,6 @@ for filename, inputs in configs:
         '--bb_dev_low_max', str(inputs['bb_dev_low_max']),
         '--bb_dev_up_min', str(inputs['bb_dev_up_min']),
         '--bb_dev_up_max', str(inputs['bb_dev_up_max']),
-        '--arming_pct_min', str(inputs['arming_pct_min']),
-        '--arming_pct_max', str(inputs['arming_pct_max']),
-        '--arm_stop_loss_pct_min', str(inputs['arm_stop_loss_pct_min']),
-        '--arm_stop_loss_pct_max', str(inputs['arm_stop_loss_pct_max']),
         '--stop_loss_pct_min', str(inputs['stop_loss_pct_min']),
         '--stop_loss_pct_max', str(inputs['stop_loss_pct_max']),
         '--number_of_cores', str(n_jobs),
