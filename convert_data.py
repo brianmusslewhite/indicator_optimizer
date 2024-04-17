@@ -60,7 +60,7 @@ file_paths = [
     r'~/Downloads/Kraken_Trading_History/XRPXBT.csv'
 ]
 
-data_frequency_minutes = [5, 15]
+data_frequency_minutes = [30]
 
 for file_path in file_paths:
     for frequency in data_frequency_minutes:
