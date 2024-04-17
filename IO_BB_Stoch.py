@@ -3,22 +3,13 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import re
-import seaborn as sns
 import signal
 import os
 from datetime import datetime
-from bayes_opt import BayesianOptimization, UtilityFunction
-from joblib import Parallel, delayed
-from math import ceil
-from tqdm import tqdm
-from pyDOE import lhs
+from bayes_opt import BayesianOptimization
 
-MINUTES_IN_DAY = 1440
-MAX_HOLD_TIME_MINUTES = MINUTES_IN_DAY * 2
+
 INTERRUPTED = False
-MIN_DESIRED_TRADE_FREQUENCY_DAYS = 14
-
-
 def signal_handler(signum, frame):
     global INTERRUPTED
     INTERRUPTED = True
@@ -28,7 +19,7 @@ def signal_handler(signum, frame):
 
 class SignalOptimizer:
     def __init__(self, filepath, pbounds, number_of_cores, start_date, end_date, init_points, iter_points, pair_points):
-        self.PBOUNDS = pbounds
+        self.pbounds = pbounds
         self.filepath = filepath
         self.number_of_cores = number_of_cores
         self.start_date = start_date
@@ -49,8 +40,6 @@ class SignalOptimizer:
         self.best_performance = float('-inf')
         self.param_to_results = {}
         self.total_percent_gain = 0
-
-        self.min_desired_trade_frequency_days = MIN_DESIRED_TRADE_FREQUENCY_DAYS
 
     def load_and_prepare_data(self):
         processed_data_path = os.path.join('Processed Data', self.filepath)
@@ -104,9 +93,9 @@ class SignalOptimizer:
         lower_band = sma - (std * deviation_lower)
         return upper_band, lower_band
 
-    def evaluate_performance(self, stoch_k_p, stoch_slow_k_p, stoch_slow_d_p, stoch_thr, bb_p, bb_dev, arm_pct, arm_stp_ls_pct, stp_ls_pct):
+    def evaluate_performance(self, stoch_k_p, stoch_slow_k_p, stoch_slow_d_p, stoch_thr, bb_p, bb_dev_low, bb_dev_up, arm_pct, arm_stp_ls_pct, stp_ls_pct):
         stoch_avg = self.calculate_stochastic_oscillator(stoch_k_p, stoch_slow_k_p, stoch_slow_d_p)
-        upper_band, lower_band = self.calculate_bollinger_bands(bb_p, bb_dev, bb_dev)
+        upper_band, lower_band = self.calculate_bollinger_bands(bb_p, bb_dev_low, bb_dev_up)
 
         initial_balance = 1.0
         current_balance = initial_balance
@@ -114,8 +103,6 @@ class SignalOptimizer:
         position_open = False
         entry_price = 0.0
         highest_price_after_buy = 0.0
-        armed = False
-        entry_index = -1
         buy_points = []
         sell_points = []
         returns = []
@@ -135,13 +122,9 @@ class SignalOptimizer:
                 position_open = True
                 entry_price = current_price
                 highest_price_after_buy = current_price
-                entry_index = i
 
             # Logic for closing position
             if position_open:
-                holding_time = i - entry_index
-                max_holding_time_reached = holding_time >= (MAX_HOLD_TIME_MINUTES / self.data_frequency_in_minutes)
-
                 # Stop loss
                 if current_price <= entry_price * (1 - stp_ls_pct / 100):
                     sell_points.append(self.data.index[i])
@@ -150,27 +133,17 @@ class SignalOptimizer:
                     profit_from_trade = capital_at_risk * trade_return
                     current_balance += profit_from_trade
                     position_open = False
-                    armed = False
-                    entry_index = -1
                     returns.append(current_price - entry_price)
 
-                # Arming stop loss and max holding time
-                if not armed and current_price >= entry_price * (1 + arm_pct / 100):
-                    armed = True
-
-                if armed and current_price <= highest_price_after_buy * (1 - arm_stp_ls_pct / 100) or max_holding_time_reached:
+                if current_price > upper_band.iloc[i]:
                     sell_points.append(self.data.index[i])
                     trade_return = (current_price - entry_price) / entry_price
                     capital_at_risk = current_balance * 0.10
                     profit_from_trade = capital_at_risk * trade_return
                     current_balance += profit_from_trade
                     position_open = False
-                    armed = False
-                    entry_index = -1
                     returns.append(current_price - entry_price)
 
-        objective_function = 0
-        profit_ratio = 0
         total_percent_gain = (current_balance - initial_balance) / initial_balance * 100
         total_num_trades = len(returns)
         returns = np.array(returns)
@@ -178,107 +151,30 @@ class SignalOptimizer:
         # Build objective function
         if total_num_trades > 0:
             profitable_trades = np.sum(returns > 0)
-            variance_of_returns = np.var(returns)
-            length_of_data_days = (len(self.data) * self.data_frequency_in_minutes) / MINUTES_IN_DAY
-            minimum_trades_required = length_of_data_days / self.min_desired_trade_frequency_days
             profit_ratio = profitable_trades / total_num_trades
-            min_target_profit_ratio, pr_weight, var_weight, pg_weight = 1, 1, 0, 1
-            total_trade_penalty_weight, profit_ratio_penalty_weight = 1, 1
-
-            profit_ratio_factor = pr_weight * profit_ratio
-            percent_gain_factor = pg_weight * total_percent_gain
-            variance_factor = var_weight * variance_of_returns
-
-            total_num_trades_penalty = total_trade_penalty_weight * min(np.exp((minimum_trades_required - total_num_trades) / total_num_trades / 5), 1E9) if total_num_trades < minimum_trades_required else 0
-            profit_ratio_penalty = profit_ratio_penalty_weight * min(np.exp((min_target_profit_ratio - profit_ratio)*1), 1E9) if profit_ratio < min_target_profit_ratio else 0
-
-            objective_function = profit_ratio_factor + percent_gain_factor - variance_factor - total_num_trades_penalty - profit_ratio_penalty
-            print(f"OF:{objective_function:10.2f}, PR,PG:{profit_ratio_factor:6.2f},{percent_gain_factor:6.2f}, VarP,#TrdP,PRP:{variance_factor:8.2f},{total_num_trades_penalty:8.2f},{profit_ratio_penalty:8.2f}")
+            objective_function = total_percent_gain
         else:
             objective_function = -1E9
-            # print("No Trades!")
+            profit_ratio = 0
         return objective_function, buy_points, sell_points, total_percent_gain, profit_ratio
 
-    def evaluate_wrapper(self, params):
+    def evaluate_wrapper(self, **params):
         performance, buy_points, sell_points, _, _,  = self.evaluate_performance(**params)
         self.param_to_results[str(params)] = (buy_points, sell_points)
         return performance
 
-    def generate_lhs_samples(self, pbounds, num_samples):
-        num_params = len(pbounds)
-        # Generate LHS samples within [0, 1]
-        lhs_samples = lhs(num_params, samples=num_samples)
-
-        samples = []
-        for i in range(num_samples):
-            sample = {}
-            for param_idx, (key, (min_val, max_val)) in enumerate(pbounds.items()):
-                # Scale each sample to the parameter's range
-                sample[key] = min_val + (max_val - min_val) * lhs_samples[i, param_idx]
-            samples.append(sample)
-
-        return samples
-
     def optimize(self):
         global INTERRUPTED
         signal.signal(signal.SIGINT, signal_handler)
-        optimizer = BayesianOptimization(
-            f=None,
-            pbounds=self.PBOUNDS,
-            random_state=1,
-            verbose=2,
-            allow_duplicate_points=True
-        )
-        utility = UtilityFunction(kind="ucb", kappa=2.5, xi=0.0)
-        init_points = self.generate_lhs_samples(self.PBOUNDS, self.init_points)
-
-        batch_size = self.number_of_cores
-        num_batches = ceil(len(init_points) / batch_size)
 
         try:
-            with tqdm(total=self.init_points, desc=f"Init {self.filepath}") as pbar:
-                for batch_idx in range(num_batches):
-                    if INTERRUPTED:
-                        print("Ctrl+C, breaking out of initial processing.")
-                        break
-                    start_idx = batch_idx * batch_size
-                    end_idx = min(start_idx + batch_size, len(init_points))
-                    batch_points = init_points[start_idx:end_idx]
-
-                    # Process each batch in parallel
-                    batch_results = Parallel(n_jobs=self.number_of_cores, backend="multiprocessing")(
-                        delayed(self.evaluate_wrapper)(params) for params in batch_points
-                    )
-
-                    for idx, performance in enumerate(batch_results):
-                        if performance != -1E9:
-                            optimizer.register(params=batch_points[idx], target=performance)
-
-                    # Update tqdm with the number of points processed in this batch
-                    pbar.update(len(batch_points))
-                    print("\n")
-
-        except KeyboardInterrupt:
-            print("\nOptimization interrupted by user. Proceeding with results obtained so far.")
-        try:
-            # Sequential Bayesian optimization
-            pbar_counter = 0
-            top_performance = 0
-            with tqdm(total=self.iter_points, desc=f"Optimizing {self.filepath}") as pbar:
-                for _ in range(self.iter_points):
-                    if INTERRUPTED:
-                        print("Ctrl+C, breaking out of initial processing.")
-                        break
-                    next_params = optimizer.suggest(utility)
-                    performance, buy_points, sell_points, total_percent_gain, profit_ratio = self.evaluate_performance(**next_params)
-                    optimizer.register(params=next_params, target=performance)
-                    pbar_counter += 1
-                    if pbar_counter % 100 == 0:
-                        pbar.update(100)
-                    if performance > top_performance:
-                        top_performance = performance
-                        print(f"New top performance: {performance:.2f}, Profit Ratio: {profit_ratio}, Total percent gain: {total_percent_gain:.2f}")
-
+            optimizer = BayesianOptimization(
+                f=self.evaluate_wrapper,
+                pbounds=self.pbounds,
+                random_state=1,
+                verbose=2
+            )
+            optimizer.maximize(init_points=self.init_points, n_iter=self.iter_points)
         except KeyboardInterrupt:
             print("\nOptimization interrupted by user. Proceeding with results obtained so far.")
 
@@ -286,26 +182,6 @@ class SignalOptimizer:
         sorted_results = sorted(optimizer.res, key=lambda x: x['target'], reverse=True)
         self.top_results = sorted_results[:self.pair_points] if len(sorted_results) >= self.pair_points else sorted_results
         return self.top_results
-
-    def visualize_top_results(self):
-        if not self.top_results:
-            print("No results to visualize.")
-            return
-
-        results_df = pd.DataFrame([res['params'] for res in self.top_results])
-        results_df['profit'] = [res['target'] for res in self.top_results]
-        filtered_results_df = results_df[results_df['profit'] != 0]
-
-        if filtered_results_df.empty:
-            print("No results to visualize after filtering out zero profits.")
-            return
-
-        pairplot = sns.pairplot(filtered_results_df, diag_kind='kde', plot_kws={'alpha': 0.6, 's': 80, 'edgecolor': 'k'}, height=2)
-        pairplot.figure.suptitle(f'{self.dataset_name}', size=12)
-
-        filename = f"{self.dataset_name}_PairPlot_{self.start_date}_to_{self.end_date}_Date_{self.time_now}.png"
-        plt.savefig(os.path.join(self.plot_subfolder, filename))
-        # plt.show()
 
     def plot_trades(self, buy_points, sell_points):
         plt.figure(figsize=(14, 7))
@@ -338,8 +214,10 @@ def parse_args():
     # BB Parameters
     parser.add_argument("--bb_period_min", type=int, default=5, help="Minimum Bollinger Bands period")
     parser.add_argument("--bb_period_max", type=int, default=20, help="Maximum Bollinger Bands period")
-    parser.add_argument("--bb_dev_min", type=float, default=1.5, help="Minimum Bollinger Bands deviation")
-    parser.add_argument("--bb_dev_max", type=float, default=2.5, help="Maximum Bollinger Bands deviation")
+    parser.add_argument("--bb_dev_low_min", type=float, default=1.5, help="Minimum Bollinger Bands deviation")
+    parser.add_argument("--bb_dev_low_max", type=float, default=2.5, help="Maximum Bollinger Bands deviation")
+    parser.add_argument("--bb_dev_up_min", type=float, default=1.5, help="Minimum Bollinger Bands deviation")
+    parser.add_argument("--bb_dev_up_max", type=float, default=2.5, help="Maximum Bollinger Bands deviation")
     # Sell Parameters
     parser.add_argument("--arming_pct_min", type=float, default=0.6, help="Minimum arming percentage for stop loss")
     parser.add_argument("--arming_pct_max", type=float, default=1.5, help="Maximum arming percentage for stop loss")
@@ -371,7 +249,6 @@ def run_optimization(filename, pbounds, number_of_cores, start_date, end_date, i
         print(f"Profit Ratio: {profit_ratio}")
         print(f"Percent Gain: {total_percent_gain}")
 
-        optimizer.visualize_top_results()
         optimizer.plot_trades(final_buy_points, final_sell_points)
 
 
@@ -383,7 +260,8 @@ if __name__ == "__main__":
         'stoch_slow_d_p': (args.stoch_d_period_min, args.stoch_d_period_max),
         'stoch_thr': (args.stoch_threshold_min, args.stoch_threshold_max),
         'bb_p': (args.bb_period_min, args.bb_period_max),
-        'bb_dev': (args.bb_dev_min, args.bb_dev_max),
+        'bb_dev_low': (args.bb_dev_low_min, args.bb_dev_low_max),
+        'bb_dev_up': (args.bb_dev_up_min, args.bb_dev_up_max),
         'arm_pct': (args.arming_pct_min, args.arming_pct_max),
         'arm_stp_ls_pct': (args.arm_stop_loss_pct_min, args.arm_stop_loss_pct_max),
         'stp_ls_pct': (args.stop_loss_pct_min, args.stop_loss_pct_max)
