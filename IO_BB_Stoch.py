@@ -3,16 +3,14 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import re
+import seaborn as sns
 import signal
 import os
 from datetime import datetime
 from bayes_opt import BayesianOptimization
 
 
-INTERRUPTED = False
 def signal_handler(signum, frame):
-    global INTERRUPTED
-    INTERRUPTED = True
     print("Signal received, stopping optimization...")
     raise KeyboardInterrupt
 
@@ -40,6 +38,7 @@ class SignalOptimizer:
         self.best_performance = float('-inf')
         self.param_to_results = {}
         self.total_percent_gain = 0
+        self.bad_result_number = -1E9
 
     def load_and_prepare_data(self):
         processed_data_path = os.path.join('Processed Data', self.filepath)
@@ -102,10 +101,10 @@ class SignalOptimizer:
 
         position_open = False
         entry_price = 0.0
-        highest_price_after_buy = 0.0
         buy_points = []
         sell_points = []
-        returns = []
+        equity_curve = [1]  # Start with initial balance normalized to 1
+        trade_results = []  # To store the results of each trade
 
         for i in range(1, len(self.data)):
             current_price = self.data['close'].iloc[i]
@@ -121,50 +120,42 @@ class SignalOptimizer:
                 buy_points.append(self.data.index[i])
                 position_open = True
                 entry_price = current_price
-                highest_price_after_buy = current_price
 
             # Logic for closing position
             if position_open:
-                # Stop loss
-                if current_price <= entry_price * (1 - stp_ls_pct / 100):
+                # Stop loss or Take profit
+                if current_price <= entry_price * (1 - stp_ls_pct / 100) or current_price > upper_band.iloc[i]:
                     sell_points.append(self.data.index[i])
                     trade_return = (current_price - entry_price) / entry_price
-                    capital_at_risk = current_balance * 0.10
-                    profit_from_trade = capital_at_risk * trade_return
-                    current_balance += profit_from_trade
+                    trade_results.append(trade_return)
+                    current_balance *= (1 + trade_return)
                     position_open = False
-                    returns.append(current_price - entry_price)
+                    equity_curve.append(current_balance / initial_balance)  # Normalize to initial balance for comparability
 
-                if current_price > upper_band.iloc[i]:
-                    sell_points.append(self.data.index[i])
-                    trade_return = (current_price - entry_price) / entry_price
-                    capital_at_risk = current_balance * 0.10
-                    profit_from_trade = capital_at_risk * trade_return
-                    current_balance += profit_from_trade
-                    position_open = False
-                    returns.append(current_price - entry_price)
+        # Calculate daily log returns for the equity curve
+        log_returns = np.diff(np.log(equity_curve))
+
+        if len(log_returns) < 2:
+            sharpe_ratio = self.bad_result_number  # Not enough data points to calculate Sharpe Ratio
+        else:
+            mean_log_return = np.mean(log_returns)
+            std_log_return = np.std(log_returns)
+            risk_free_rate = 0.0  # Assume risk-free rate is 0 for simplicity, adjust as needed
+            sharpe_ratio = (mean_log_return - risk_free_rate) / std_log_return if std_log_return > 0 else self.bad_result_number
 
         total_percent_gain = (current_balance - initial_balance) / initial_balance * 100
-        total_num_trades = len(returns)
-        returns = np.array(returns)
+        total_trades = len(trade_results)
+        profitable_trades = sum(1 for result in trade_results if result > 0)
+        profit_ratio = profitable_trades / total_trades if total_trades > 0 else 0
 
-        # Build objective function
-        if total_num_trades > 0:
-            profitable_trades = np.sum(returns > 0)
-            profit_ratio = profitable_trades / total_num_trades
-            objective_function = total_percent_gain
-        else:
-            objective_function = -1E9
-            profit_ratio = 0
-        return objective_function, buy_points, sell_points, total_percent_gain, profit_ratio
+        return sharpe_ratio, buy_points, sell_points, total_percent_gain, profit_ratio
 
     def evaluate_wrapper(self, **params):
-        performance, buy_points, sell_points, _, _,  = self.evaluate_performance(**params)
-        self.param_to_results[str(params)] = (buy_points, sell_points)
-        return performance
+        sharpe_ratio, buy_points, sell_points, total_percent_gain, _,  = self.evaluate_performance(**params)
+        self.param_to_results[str(params)] = (buy_points, sell_points, total_percent_gain)
+        return sharpe_ratio
 
     def optimize(self):
-        global INTERRUPTED
         signal.signal(signal.SIGINT, signal_handler)
 
         try:
@@ -198,6 +189,18 @@ class SignalOptimizer:
         filename = f"{self.dataset_name}_BUYSELLResults_{self.start_date}_to_{self.end_date}_Date_{self.time_now}.png"
         plt.savefig(os.path.join(self.plot_subfolder, filename))
         plt.show()
+
+    def pair_plot_top_results(self):
+        results_df = pd.DataFrame([res['params'] for res in self.top_results])
+        results_df['total_percent_gain'] = [self.param_to_results[str(res['params'])][2] for res in self.top_results]
+        filtered_results_df = results_df[(results_df['total_percent_gain'] != self.bad_result_number) & (results_df['total_percent_gain'] != 0)]
+
+        if not filtered_results_df.empty:
+            pairplot = sns.pairplot(filtered_results_df, diag_kind='kde', plot_kws={'alpha': 0.6, 's': 80, 'edgecolor': 'k'}, height=2)
+            pairplot.figure.suptitle(f'{self.dataset_name}', size=12)
+
+            filename = f"{self.dataset_name}_PairPlot_{self.start_date}_to_{self.end_date}_Date_{self.time_now}.png"
+            plt.savefig(os.path.join(self.plot_subfolder, filename))
 
 
 def parse_args():
@@ -245,6 +248,7 @@ def run_optimization(filename, pbounds, number_of_cores, start_date, end_date, i
         print(f"Profit Ratio: {profit_ratio}")
         print(f"Percent Gain: {total_percent_gain}")
 
+        optimizer.pair_plot_top_results()
         optimizer.plot_trades(final_buy_points, final_sell_points)
 
 
