@@ -20,7 +20,7 @@ configs = [
         'bb_p_min': 1, 'bb_p_max': 40,
         'bb_dev_low_min': 1, 'bb_dev_low_max': 3,
         'bb_dev_up_min': 1, 'bb_dev_up_max': 3,
-        'stop_loss_pct_min': 1, 'stop_loss_pct_max': 3
+        'stop_loss_pct_min': 0.5, 'stop_loss_pct_max': 3
     }),
 
     ("LTCXBT_30min_Kraken.csv", {
