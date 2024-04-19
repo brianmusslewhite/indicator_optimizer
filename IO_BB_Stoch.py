@@ -16,7 +16,7 @@ def signal_handler(signum, frame):
 
 
 class SignalOptimizer:
-    def __init__(self, filepath, pbounds, number_of_cores, start_date, end_date, init_points, iter_points, pair_points):
+    def __init__(self, filepath, pbounds, number_of_cores, start_date, end_date, ideal_trade_frequency_hours, init_points, iter_points, pair_points):
         self.pbounds = pbounds
         self.filepath = filepath
         self.number_of_cores = number_of_cores
@@ -32,6 +32,9 @@ class SignalOptimizer:
         self.time_now = datetime.now().strftime('%Y%m%d_%H%M%S')
 
         self.load_and_prepare_data()
+
+        data_duration_hours = ((self.data.index.max()-self.data.index.min())*self.data_frequency_in_minutes)/60
+        self.min_trades = int(np.ceil(data_duration_hours / ideal_trade_frequency_hours))
 
         self.best_buy_points = []
         self.best_sell_points = []
@@ -103,8 +106,8 @@ class SignalOptimizer:
         entry_price = 0.0
         buy_points = []
         sell_points = []
-        equity_curve = [1]  # Start with initial balance normalized to 1
-        trade_results = []  # To store the results of each trade
+        equity_curve = [1]
+        trade_results = []
 
         for i in range(1, len(self.data)):
             current_price = self.data['close'].iloc[i]
@@ -136,17 +139,23 @@ class SignalOptimizer:
         log_returns = np.diff(np.log(equity_curve))
 
         if len(log_returns) < 2:
-            sharpe_ratio = self.bad_result_number  # Not enough data points to calculate Sharpe Ratio
+            sharpe_ratio = self.bad_result_number
         else:
             mean_log_return = np.mean(log_returns)
             std_log_return = np.std(log_returns)
-            risk_free_rate = 0.0  # Assume risk-free rate is 0 for simplicity, adjust as needed
+            risk_free_rate = 0.0
             sharpe_ratio = (mean_log_return - risk_free_rate) / std_log_return if std_log_return > 0 else self.bad_result_number
 
         total_percent_gain = (current_balance - initial_balance) / initial_balance * 100
         total_trades = len(trade_results)
         profitable_trades = sum(1 for result in trade_results if result > 0)
         profit_ratio = profitable_trades / total_trades if total_trades > 0 else 0
+
+        # Penalty for trade frequency
+        if total_trades < self.min_trades:
+            deficit = self.min_trades - total_trades
+            penalty = deficit * 0.5
+            sharpe_ratio -= penalty
 
         return sharpe_ratio, buy_points, sell_points, total_percent_gain, profit_ratio
 
@@ -229,14 +238,15 @@ def parse_args():
     parser.add_argument("--number_of_cores", type=int, default=1, help="Number of CPU cores to use during initial search")
     parser.add_argument("--start_date", type=str, default='2023-10-30', help="Start date for optimization")
     parser.add_argument("--end_date", type=str, default='2023-11-29', help="End date for optimization")
+    parser.add_argument("--ideal_trade_frequency_hours", type=float, default=24, help="Ideal trading frequency in hours")
     parser.add_argument("--init_points", type=int, default=100, help="Number of initial points to search")
     parser.add_argument("--iter_points", type=int, default=100, help="Number of optimization itterations")
     parser.add_argument("--pair_points", type=int, default=100, help="Number of points to show in the pair graph")
     return parser.parse_args()
 
 
-def run_optimization(filename, pbounds, number_of_cores, start_date, end_date, init_points, iter_points, pair_points):
-    optimizer = SignalOptimizer(filename, pbounds, number_of_cores, start_date, end_date, init_points, iter_points, pair_points)
+def run_optimization(filename, pbounds, number_of_cores, start_date, end_date, ideal_trade_frequency_hours, init_points, iter_points, pair_points):
+    optimizer = SignalOptimizer(filename, pbounds, number_of_cores, start_date, end_date, ideal_trade_frequency_hours, init_points, iter_points, pair_points)
     top_results = optimizer.optimize()
 
     if top_results:
@@ -265,4 +275,4 @@ if __name__ == "__main__":
         'stp_ls_pct': (args.stop_loss_pct_min, args.stop_loss_pct_max)
     }
 
-    run_optimization(args.filename, PBOUNDS, args.number_of_cores, args.start_date, args.end_date, args.init_points, args.iter_points, args.pair_points)
+    run_optimization(args.filename, PBOUNDS, args.number_of_cores, args.start_date, args.end_date, args.ideal_trade_frequency_hours, args.init_points, args.iter_points, args.pair_points)

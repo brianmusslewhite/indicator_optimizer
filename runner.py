@@ -11,6 +11,7 @@ elif os_name == "Windows":
 configs = [
     ("ETHXBT_30min_Kraken.csv", {
         'start_date': '2023-9-1', 'end_date': '2023-12-31',
+        'ideal_trade_frequency_hours': (24*10),
         'init_points': 200, 'iter_points': 1500,
         'pair_points': 500,
         'stoch_k_period_min': 5, 'stoch_k_period_max': 14,
@@ -25,6 +26,7 @@ configs = [
 
     ("LTCXBT_30min_Kraken.csv", {
         'start_date': '2023-9-1', 'end_date': '2023-12-31',
+        'ideal_trade_frequency_hours': (24*10),
         'init_points': 200, 'iter_points': 1500,
         'pair_points': 500,
         'stoch_k_period_min': 5, 'stoch_k_period_max': 14,
@@ -65,6 +67,7 @@ for filename, inputs in configs:
         '--number_of_cores', str(n_jobs),
         '--start_date', str(inputs['start_date']),
         '--end_date', str(inputs['end_date']),
+        '--ideal_trade_frequency_hours', str(inputs['ideal_trade_frequency_hours']),
         '--init_points', str(inputs['init_points']),
         '--iter_points', str(inputs['iter_points']),
         '--pair_points', str(inputs['pair_points']),
