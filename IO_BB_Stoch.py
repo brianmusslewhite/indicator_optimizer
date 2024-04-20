@@ -1,6 +1,7 @@
 import argparse
 import pandas as pd
 import numpy as np
+import math
 import matplotlib.pyplot as plt
 import re
 import seaborn as sns
@@ -17,7 +18,7 @@ def signal_handler(signum, frame):
 
 
 class SignalOptimizer:
-    def __init__(self, filepath, pbounds, number_of_cores, start_date, end_date, ideal_trade_frequency_hours, init_points, iter_points, pair_points):
+    def __init__(self, filepath, pbounds, number_of_cores, start_date, end_date, init_points, iter_points, pair_points):
         self.pbounds = pbounds
         self.filepath = filepath
         self.number_of_cores = number_of_cores
@@ -27,22 +28,18 @@ class SignalOptimizer:
         self.iter_points = iter_points
         self.pair_points = pair_points
         self.dataset_name = os.path.basename(self.filepath).split('.')[0]
-
         self.plot_subfolder = os.path.join('indicator_optimizer_plots', self.dataset_name)
         os.makedirs(self.plot_subfolder, exist_ok=True)
         self.time_now = datetime.now().strftime('%Y%m%d_%H%M%S')
-
         self.load_and_prepare_data()
-
-        data_duration_hours = ((self.data.index.max()-self.data.index.min())*self.data_frequency_in_minutes)/60
-        self.min_trades = int(np.ceil(data_duration_hours / ideal_trade_frequency_hours))
-
+        self.data_duration_hours = ((self.data.index.max()-self.data.index.min())*self.data_frequency_in_minutes)/60
         self.best_buy_points = []
         self.best_sell_points = []
         self.best_performance = float('-inf')
         self.param_to_results = {}
         self.total_percent_gain = 0
-        self.bad_result_number = -1E9
+        self.bad_result_number = -200
+        self.max_penalty = 150
 
     def load_and_prepare_data(self):
         processed_data_path = os.path.join('Processed Data', self.filepath)
@@ -117,10 +114,11 @@ class SignalOptimizer:
 
         return samples
 
-    def evaluate_performance(self, stoch_k_p, stoch_slow_k_p, stoch_slow_d_p, stoch_thr, bb_p, bb_dev_low, bb_dev_up, cci_p, stp_ls_pct):
+    def evaluate_performance(self, stoch_k_p, stoch_slow_k_p, stoch_slow_d_p, stoch_thr, bb_p, bb_dev_low, bb_dev_up, cci_p, stp_ls_pct, idl_trd_frq_hrs):
         stoch_avg = self.calculate_stochastic_oscillator(stoch_k_p, stoch_slow_k_p, stoch_slow_d_p)
         upper_band, lower_band = self.calculate_bollinger_bands(bb_p, bb_dev_low, bb_dev_up)
         cci = self.calculate_cci(cci_p)
+        min_trades = int(np.ceil(self.data_duration_hours / idl_trd_frq_hrs))
 
         initial_balance = 1.0
         current_balance = initial_balance
@@ -177,9 +175,9 @@ class SignalOptimizer:
         profit_ratio = profitable_trades / total_trades if total_trades > 0 else 0
 
         # Penalty for trade frequency
-        if total_trades < self.min_trades:
-            deficit = self.min_trades - total_trades
-            penalty = deficit * 0.5
+        if total_trades < min_trades:
+            deficit = min_trades - total_trades
+            penalty = 75 + min((math.exp(deficit*.1) - 1), self.max_penalty)
             sharpe_ratio -= penalty
 
         return sharpe_ratio, buy_points, sell_points, total_percent_gain, profit_ratio
@@ -197,15 +195,14 @@ class SignalOptimizer:
             random_state=1,
             verbose=2
         )
-
-        lhs_init_points = self.generate_lhs_samples(self.pbounds, self.init_points)
-        for point in lhs_init_points:
-            optimizer.probe(
-                params=point,
-                lazy=True
-            )
-
         try:
+            lhs_init_points = self.generate_lhs_samples(self.pbounds, self.init_points)
+            for point in lhs_init_points:
+                optimizer.probe(
+                    params=point,
+                    lazy=True
+                )
+
             optimizer.maximize(
                 init_points=0,
                 n_iter=self.iter_points
@@ -275,15 +272,16 @@ def parse_args():
     parser.add_argument("--number_of_cores", type=int, default=1, help="Number of CPU cores to use during initial search")
     parser.add_argument("--start_date", type=str, default='2023-10-30', help="Start date for optimization")
     parser.add_argument("--end_date", type=str, default='2023-11-29', help="End date for optimization")
-    parser.add_argument("--ideal_trade_frequency_hours", type=float, default=24, help="Ideal trading frequency in hours")
+    parser.add_argument("--ideal_trade_frequency_hours_min", type=float, default=24, help="Ideal trading frequency in hours min")
+    parser.add_argument("--ideal_trade_frequency_hours_max", type=float, default=(24*7), help="Ideal trading frequency in hours max")
     parser.add_argument("--init_points", type=int, default=100, help="Number of initial points to search")
     parser.add_argument("--iter_points", type=int, default=100, help="Number of optimization itterations")
     parser.add_argument("--pair_points", type=int, default=100, help="Number of points to show in the pair graph")
     return parser.parse_args()
 
 
-def run_optimization(filename, pbounds, number_of_cores, start_date, end_date, ideal_trade_frequency_hours, init_points, iter_points, pair_points):
-    optimizer = SignalOptimizer(filename, pbounds, number_of_cores, start_date, end_date, ideal_trade_frequency_hours, init_points, iter_points, pair_points)
+def run_optimization(filename, pbounds, number_of_cores, start_date, end_date, init_points, iter_points, pair_points):
+    optimizer = SignalOptimizer(filename, pbounds, number_of_cores, start_date, end_date, init_points, iter_points, pair_points)
     top_results = optimizer.optimize()
 
     if top_results:
@@ -311,7 +309,8 @@ if __name__ == "__main__":
         'bb_dev_low': (args.bb_dev_low_min, args.bb_dev_low_max),
         'bb_dev_up': (args.bb_dev_up_min, args.bb_dev_up_max),
         'cci_p': (args.cci_p_min, args.cci_p_max),
-        'stp_ls_pct': (args.stop_loss_pct_min, args.stop_loss_pct_max)
+        'stp_ls_pct': (args.stop_loss_pct_min, args.stop_loss_pct_max),
+        'idl_trd_frq_hrs': (args.ideal_trade_frequency_hours_min, args.ideal_trade_frequency_hours_max)
     }
 
-    run_optimization(args.filename, PBOUNDS, args.number_of_cores, args.start_date, args.end_date, args.ideal_trade_frequency_hours, args.init_points, args.iter_points, args.pair_points)
+    run_optimization(args.filename, PBOUNDS, args.number_of_cores, args.start_date, args.end_date, args.init_points, args.iter_points, args.pair_points)
