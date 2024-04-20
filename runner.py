@@ -10,9 +10,9 @@ elif os_name == "Windows":
 
 configs = [
     ("ETHXBT_30min_Kraken.csv", {
-        'start_date': '2023-9-1', 'end_date': '2023-12-31',
-        'ideal_trade_frequency_hours': (24*10),
-        'init_points': 200, 'iter_points': 1500,
+        'start_date': '2023-6-1', 'end_date': '2023-12-31',
+        'ideal_trade_frequency_hours': (24*5),
+        'init_points': 500, 'iter_points': 5000,
         'pair_points': 500,
         'stoch_k_period_min': 5, 'stoch_k_period_max': 14,
         'stoch_d_period_min': 3, 'stoch_d_period_max': 8,
@@ -21,13 +21,14 @@ configs = [
         'bb_p_min': 1, 'bb_p_max': 40,
         'bb_dev_low_min': 1, 'bb_dev_low_max': 3,
         'bb_dev_up_min': 1, 'bb_dev_up_max': 3,
+        'cci_p_min': 5, 'cci_p_max': 70,
         'stop_loss_pct_min': 0.5, 'stop_loss_pct_max': 3
     }),
 
     ("LTCXBT_30min_Kraken.csv", {
-        'start_date': '2023-9-1', 'end_date': '2023-12-31',
-        'ideal_trade_frequency_hours': (24*10),
-        'init_points': 200, 'iter_points': 1500,
+        'start_date': '2023-6-1', 'end_date': '2023-12-31',
+        'ideal_trade_frequency_hours': (24*5),
+        'init_points': 500, 'iter_points': 5000,
         'pair_points': 500,
         'stoch_k_period_min': 5, 'stoch_k_period_max': 14,
         'stoch_d_period_min': 3, 'stoch_d_period_max': 8,
@@ -36,6 +37,7 @@ configs = [
         'bb_p_min': 1, 'bb_p_max': 40,
         'bb_dev_low_min': 1, 'bb_dev_low_max': 3,
         'bb_dev_up_min': 1, 'bb_dev_up_max': 3,
+        'cci_p_min': 5, 'cci_p_max': 60,
         'stop_loss_pct_min': 0.5, 'stop_loss_pct_max': 3
     }),
 ]
@@ -62,6 +64,8 @@ for filename, inputs in configs:
         '--bb_dev_low_max', str(inputs['bb_dev_low_max']),
         '--bb_dev_up_min', str(inputs['bb_dev_up_min']),
         '--bb_dev_up_max', str(inputs['bb_dev_up_max']),
+        '--cci_p_min', str(inputs['cci_p_min']),
+        '--cci_p_max', str(inputs['cci_p_max']),
         '--stop_loss_pct_min', str(inputs['stop_loss_pct_min']),
         '--stop_loss_pct_max', str(inputs['stop_loss_pct_max']),
         '--number_of_cores', str(n_jobs),

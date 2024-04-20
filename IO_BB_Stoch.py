@@ -8,6 +8,7 @@ import signal
 import os
 from datetime import datetime
 from bayes_opt import BayesianOptimization
+from pyDOE import lhs
 
 
 def signal_handler(signum, frame):
@@ -95,9 +96,31 @@ class SignalOptimizer:
         lower_band = sma - (std * deviation_lower)
         return upper_band, lower_band
 
-    def evaluate_performance(self, stoch_k_p, stoch_slow_k_p, stoch_slow_d_p, stoch_thr, bb_p, bb_dev_low, bb_dev_up, stp_ls_pct):
+    def calculate_cci(self, period):
+        period = int(period)
+        TP = (self.data['high'] + self.data['low'] + self.data['close']) / 3
+        CCI = (TP - TP.rolling(window=period).mean()) / (0.015 * TP.rolling(window=period).std())
+        return CCI
+
+    def generate_lhs_samples(self, pbounds, num_samples):
+        num_params = len(pbounds)
+        # Generate LHS samples within [0, 1]
+        lhs_samples = lhs(num_params, samples=num_samples)
+
+        samples = []
+        for i in range(num_samples):
+            sample = {}
+            for param_idx, (key, (min_val, max_val)) in enumerate(pbounds.items()):
+                # Scale each sample to the parameter's range
+                sample[key] = min_val + (max_val - min_val) * lhs_samples[i, param_idx]
+            samples.append(sample)
+
+        return samples
+
+    def evaluate_performance(self, stoch_k_p, stoch_slow_k_p, stoch_slow_d_p, stoch_thr, bb_p, bb_dev_low, bb_dev_up, cci_p, stp_ls_pct):
         stoch_avg = self.calculate_stochastic_oscillator(stoch_k_p, stoch_slow_k_p, stoch_slow_d_p)
         upper_band, lower_band = self.calculate_bollinger_bands(bb_p, bb_dev_low, bb_dev_up)
+        cci = self.calculate_cci(cci_p)
 
         initial_balance = 1.0
         current_balance = initial_balance
@@ -117,9 +140,11 @@ class SignalOptimizer:
                 signals_met += 1
             if current_price < lower_band.iloc[i]:
                 signals_met += 1
+            if (0 >= cci.iloc[i] >= -100):
+                signals_met += 1
 
             # Logic for opening position
-            if signals_met >= 2 and not position_open:
+            if signals_met >= 3 and not position_open:
                 buy_points.append(self.data.index[i])
                 position_open = True
                 entry_price = current_price
@@ -166,15 +191,25 @@ class SignalOptimizer:
 
     def optimize(self):
         signal.signal(signal.SIGINT, signal_handler)
+        optimizer = BayesianOptimization(
+            f=self.evaluate_wrapper,
+            pbounds=self.pbounds,
+            random_state=1,
+            verbose=2
+        )
+
+        lhs_init_points = self.generate_lhs_samples(self.pbounds, self.init_points)
+        for point in lhs_init_points:
+            optimizer.probe(
+                params=point,
+                lazy=True
+            )
 
         try:
-            optimizer = BayesianOptimization(
-                f=self.evaluate_wrapper,
-                pbounds=self.pbounds,
-                random_state=1,
-                verbose=2
+            optimizer.maximize(
+                init_points=0,
+                n_iter=self.iter_points
             )
-            optimizer.maximize(init_points=self.init_points, n_iter=self.iter_points)
         except KeyboardInterrupt:
             print("\nOptimization interrupted by user. Proceeding with results obtained so far.")
 
@@ -230,6 +265,8 @@ def parse_args():
     parser.add_argument("--bb_dev_low_max", type=float, default=2.5, help="Maximum Bollinger Bands deviation")
     parser.add_argument("--bb_dev_up_min", type=float, default=1.5, help="Minimum Bollinger Bands deviation")
     parser.add_argument("--bb_dev_up_max", type=float, default=2.5, help="Maximum Bollinger Bands deviation")
+    parser.add_argument("--cci_p_min", type=int, default=10, help="Minimum cci period")
+    parser.add_argument("--cci_p_max", type=int, default=30, help="Maximum cci period")
     # Sell Parameters
     parser.add_argument("--stop_loss_pct_min", type=float, default=1, help="Minimum stop loss percentage")
     parser.add_argument("--stop_loss_pct_max", type=float, default=2, help="Maximum stop loss percentage")
@@ -253,6 +290,7 @@ def run_optimization(filename, pbounds, number_of_cores, start_date, end_date, i
         best_params = top_results[0]['params']
         final_performance, final_buy_points, final_sell_points, total_percent_gain, profit_ratio = optimizer.evaluate_performance(**best_params)
 
+        print(filename)
         print(f"Optimized Indicator Parameters: {best_params}")
         print(f"Best Performance: {final_performance}")
         print(f"Profit Ratio: {profit_ratio}")
@@ -272,6 +310,7 @@ if __name__ == "__main__":
         'bb_p': (args.bb_period_min, args.bb_period_max),
         'bb_dev_low': (args.bb_dev_low_min, args.bb_dev_low_max),
         'bb_dev_up': (args.bb_dev_up_min, args.bb_dev_up_max),
+        'cci_p': (args.cci_p_min, args.cci_p_max),
         'stp_ls_pct': (args.stop_loss_pct_min, args.stop_loss_pct_max)
     }
 
