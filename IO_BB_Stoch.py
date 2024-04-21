@@ -38,7 +38,7 @@ class SignalOptimizer:
         self.best_performance = float('-inf')
         self.param_to_results = {}
         self.total_percent_gain = 0
-        self.bad_result_number = -200
+        self.bad_result_number = -500
         self.max_penalty = 150
 
     def load_and_prepare_data(self):
@@ -129,6 +129,7 @@ class SignalOptimizer:
         sell_points = []
         equity_curve = [1]
         trade_results = []
+        min_prifit_ratio = 0.9
 
         for i in range(1, len(self.data)):
             current_price = self.data['close'].iloc[i]
@@ -176,9 +177,17 @@ class SignalOptimizer:
 
         # Penalty for trade frequency
         if total_trades < min_trades:
-            deficit = min_trades - total_trades
-            penalty = 75 + min((math.exp(deficit*.1) - 1), self.max_penalty)
-            sharpe_ratio -= penalty
+            trade_deficit = min_trades - total_trades
+            trade_penalty = 75 + min((math.exp(trade_deficit*.1) - 1), self.max_penalty)
+            print(f"Trade Penalty: {trade_penalty}")
+            sharpe_ratio -= trade_penalty
+
+        # Penalty for profit ratio
+        if profit_ratio < min_prifit_ratio:
+            pr_deficit = min_prifit_ratio - profit_ratio
+            pr_penalty = min((math.exp(pr_deficit*10) - 1), self.max_penalty)
+            print(f"Profit Ratio Penalty: {pr_penalty}")
+            sharpe_ratio -= pr_penalty
 
         return sharpe_ratio, buy_points, sell_points, total_percent_gain, profit_ratio
 

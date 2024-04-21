@@ -20,7 +20,7 @@ configs = [
         'stoch_slowing_min': 1, 'stoch_slowing_max': 5,
         'stoch_threshold_min': 30, 'stoch_threshold_max': 80,
         'bb_p_min': 12, 'bb_p_max': 25,
-        'bb_dev_low_min': 1.5, 'bb_dev_low_max': 2.5,
+        'bb_dev_low_min': 1.0, 'bb_dev_low_max': 2.5,
         'bb_dev_up_min': 1.5, 'bb_dev_up_max': 2.5,
         'cci_p_min': 25, 'cci_p_max': 45,
         'stop_loss_pct_min': 0.75, 'stop_loss_pct_max': 2
@@ -37,7 +37,7 @@ configs = [
         'stoch_slowing_min': 1, 'stoch_slowing_max': 5,
         'stoch_threshold_min': 30, 'stoch_threshold_max': 80,
         'bb_p_min': 12, 'bb_p_max': 25,
-        'bb_dev_low_min': 1.5, 'bb_dev_low_max': 2.5,
+        'bb_dev_low_min': 1.0, 'bb_dev_low_max': 2.5,
         'bb_dev_up_min': 1.5, 'bb_dev_up_max': 2.5,
         'cci_p_min': 25, 'cci_p_max': 45,
         'stop_loss_pct_min': 0.75, 'stop_loss_pct_max': 2
@@ -54,7 +54,7 @@ configs = [
         'stoch_slowing_min': 1, 'stoch_slowing_max': 5,
         'stoch_threshold_min': 30, 'stoch_threshold_max': 80,
         'bb_p_min': 12, 'bb_p_max': 25,
-        'bb_dev_low_min': 1.5, 'bb_dev_low_max': 2.5,
+        'bb_dev_low_min': 1.0, 'bb_dev_low_max': 2.5,
         'bb_dev_up_min': 1.5, 'bb_dev_up_max': 2.5,
         'cci_p_min': 25, 'cci_p_max': 45,
         'stop_loss_pct_min': 0.75, 'stop_loss_pct_max': 2
@@ -71,7 +71,7 @@ configs = [
         'stoch_slowing_min': 1, 'stoch_slowing_max': 5,
         'stoch_threshold_min': 30, 'stoch_threshold_max': 80,
         'bb_p_min': 12, 'bb_p_max': 25,
-        'bb_dev_low_min': 1.5, 'bb_dev_low_max': 2.5,
+        'bb_dev_low_min': 1.0, 'bb_dev_low_max': 2.5,
         'bb_dev_up_min': 1.5, 'bb_dev_up_max': 2.5,
         'cci_p_min': 25, 'cci_p_max': 45,
         'stop_loss_pct_min': 0.75, 'stop_loss_pct_max': 2
