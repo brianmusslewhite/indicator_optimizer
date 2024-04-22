@@ -11,9 +11,9 @@ elif os_name == "Windows":
 configs = [
     ("ETHXBT_30min_Kraken.csv", {
         'start_date': '2023-11-1', 'end_date': '2023-12-31',
-        'ideal_trade_frequency_hours_min': (24*3),
+        'ideal_trade_frequency_hours_min': (24*1),
         'ideal_trade_frequency_hours_max': (24*7),
-        'init_points': 400, 'iter_points': 10000,
+        'init_points': 500, 'iter_points': 10000,
         'pair_points': 1000,
         'stoch_k_period_min': 14, 'stoch_k_period_max': 24,
         'stoch_d_period_min': 3, 'stoch_d_period_max': 8,
@@ -22,15 +22,15 @@ configs = [
         'bb_p_min': 12, 'bb_p_max': 25,
         'bb_dev_low_min': 1.0, 'bb_dev_low_max': 2.5,
         'bb_dev_up_min': 1.5, 'bb_dev_up_max': 2.5,
-        'cci_p_min': 25, 'cci_p_max': 45,
+        'cci_p_min': 10, 'cci_p_max': 60,
         'stop_loss_pct_min': 0.75, 'stop_loss_pct_max': 2
     }),
 
     ("LTCXBT_30min_Kraken.csv", {
         'start_date': '2023-11-1', 'end_date': '2023-12-31',
-        'ideal_trade_frequency_hours_min': (24*3),
+        'ideal_trade_frequency_hours_min': (24*1),
         'ideal_trade_frequency_hours_max': (24*7),
-        'init_points': 400, 'iter_points': 10000,
+        'init_points': 500, 'iter_points': 10000,
         'pair_points': 1000,
         'stoch_k_period_min': 14, 'stoch_k_period_max': 24,
         'stoch_d_period_min': 3, 'stoch_d_period_max': 8,
@@ -39,15 +39,15 @@ configs = [
         'bb_p_min': 12, 'bb_p_max': 25,
         'bb_dev_low_min': 1.0, 'bb_dev_low_max': 2.5,
         'bb_dev_up_min': 1.5, 'bb_dev_up_max': 2.5,
-        'cci_p_min': 25, 'cci_p_max': 45,
+        'cci_p_min': 10, 'cci_p_max': 60,
         'stop_loss_pct_min': 0.75, 'stop_loss_pct_max': 2
     }),
 
     ("MATICXBT_30min_Kraken.csv", {
         'start_date': '2023-11-1', 'end_date': '2023-12-31',
-        'ideal_trade_frequency_hours_min': (24*3),
+        'ideal_trade_frequency_hours_min': (24*1),
         'ideal_trade_frequency_hours_max': (24*7),
-        'init_points': 400, 'iter_points': 10000,
+        'init_points': 500, 'iter_points': 10000,
         'pair_points': 1000,
         'stoch_k_period_min': 14, 'stoch_k_period_max': 24,
         'stoch_d_period_min': 3, 'stoch_d_period_max': 8,
@@ -56,15 +56,15 @@ configs = [
         'bb_p_min': 12, 'bb_p_max': 25,
         'bb_dev_low_min': 1.0, 'bb_dev_low_max': 2.5,
         'bb_dev_up_min': 1.5, 'bb_dev_up_max': 2.5,
-        'cci_p_min': 25, 'cci_p_max': 45,
+        'cci_p_min': 10, 'cci_p_max': 60,
         'stop_loss_pct_min': 0.75, 'stop_loss_pct_max': 2
     }),
 
     ("XDGXBT_30min_Kraken.csv", {
         'start_date': '2023-11-1', 'end_date': '2023-12-31',
-        'ideal_trade_frequency_hours_min': (24*3),
+        'ideal_trade_frequency_hours_min': (24*1),
         'ideal_trade_frequency_hours_max': (24*7),
-        'init_points': 400, 'iter_points': 10000,
+        'init_points': 500, 'iter_points': 10000,
         'pair_points': 1000,
         'stoch_k_period_min': 14, 'stoch_k_period_max': 24,
         'stoch_d_period_min': 3, 'stoch_d_period_max': 8,
@@ -73,7 +73,7 @@ configs = [
         'bb_p_min': 12, 'bb_p_max': 25,
         'bb_dev_low_min': 1.0, 'bb_dev_low_max': 2.5,
         'bb_dev_up_min': 1.5, 'bb_dev_up_max': 2.5,
-        'cci_p_min': 25, 'cci_p_max': 45,
+        'cci_p_min': 10, 'cci_p_max': 60,
         'stop_loss_pct_min': 0.75, 'stop_loss_pct_max': 2
     }),
 ]
