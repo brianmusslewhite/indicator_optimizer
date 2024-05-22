@@ -29,25 +29,25 @@ configs = [
         'stop_loss_pct_min': 1, 'stop_loss_pct_max': 3
     }),
 
-    ("LTCXBT_15min_Kraken.csv", {
-        'start_date': '2023-12-1', 'end_date': '2023-12-31',
-        'init_points': 1000, 'iter_points': 20000,
-        'pair_points': 500,
-        'rsi_period_min': 2, 'rsi_period_max': 15,
-        'rsi_threshold_min': 20, 'rsi_threshold_max': 80,
-        'ema_short_period_min': 2, 'ema_short_period_max': 10,
-        'ema_long_period_min': 11, 'ema_long_period_max': 30,
-        'ema_persistence_min': 1, 'ema_persistence_max': 10,
-        'stoch_k_period_min': 5, 'stoch_k_period_max': 14,
-        'stoch_d_period_min': 3, 'stoch_d_period_max': 8,
-        'stoch_slowing_min': 1, 'stoch_slowing_max': 5,
-        'stoch_threshold_min': 20, 'stoch_threshold_max': 80,
-        'obv_ema_period_min': 1, 'obv_ema_period_max': 10,
-        'obv_persistence_min': 1, 'obv_persistence_max': 10,
-        'arming_pct_min': 0.7, 'arming_pct_max': 1.4,
-        'arm_stop_loss_pct_min': 0.1, 'arm_stop_loss_pct_max': 0.3,
-        'stop_loss_pct_min': 1, 'stop_loss_pct_max': 3
-    }),
+    # ("LTCXBT_15min_Kraken.csv", {
+    #     'start_date': '2023-12-1', 'end_date': '2023-12-31',
+    #     'init_points': 1000, 'iter_points': 20000,
+    #     'pair_points': 500,
+    #     'rsi_period_min': 2, 'rsi_period_max': 15,
+    #     'rsi_threshold_min': 20, 'rsi_threshold_max': 80,
+    #     'ema_short_period_min': 2, 'ema_short_period_max': 10,
+    #     'ema_long_period_min': 11, 'ema_long_period_max': 30,
+    #     'ema_persistence_min': 1, 'ema_persistence_max': 10,
+    #     'stoch_k_period_min': 5, 'stoch_k_period_max': 14,
+    #     'stoch_d_period_min': 3, 'stoch_d_period_max': 8,
+    #     'stoch_slowing_min': 1, 'stoch_slowing_max': 5,
+    #     'stoch_threshold_min': 20, 'stoch_threshold_max': 80,
+    #     'obv_ema_period_min': 1, 'obv_ema_period_max': 10,
+    #     'obv_persistence_min': 1, 'obv_persistence_max': 10,
+    #     'arming_pct_min': 0.7, 'arming_pct_max': 1.4,
+    #     'arm_stop_loss_pct_min': 0.1, 'arm_stop_loss_pct_max': 0.3,
+    #     'stop_loss_pct_min': 1, 'stop_loss_pct_max': 3
+    # }),
 
     # ("LTCXBT_15min_Kraken.csv", {
     #     'start_date': '2023-9-1', 'end_date': '2023-12-31',

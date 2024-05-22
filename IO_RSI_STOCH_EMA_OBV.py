@@ -6,13 +6,13 @@ import re
 import seaborn as sns
 import signal
 import os
-import pywt
 from datetime import datetime
 from bayes_opt import BayesianOptimization, UtilityFunction
 from joblib import Parallel, delayed
 from math import ceil
 from tqdm import tqdm
-from pyDOE import lhs
+
+from load_data import DataLoader
 
 MINUTES_IN_DAY = 1440
 MAX_HOLD_TIME_MINUTES = MINUTES_IN_DAY * 2
@@ -43,7 +43,8 @@ class SignalOptimizer:
         os.makedirs(self.plot_subfolder, exist_ok=True)
         self.time_now = datetime.now().strftime('%Y%m%d_%H%M%S')
 
-        self.load_and_prepare_data()
+        self.data_loader = DataLoader(filepath, start_date, end_date)
+        self.data = self.data_loader.data
 
         self.best_buy_points = []
         self.best_sell_points = []
@@ -52,49 +53,6 @@ class SignalOptimizer:
         self.total_percent_gain = 0
 
         self.min_desired_trade_frequency_days = MIN_DESIRED_TRADE_FREQUENCY_DAYS
-
-    def load_and_prepare_data(self):
-        processed_data_path = os.path.join('Processed Data', self.filepath)
-
-        self.data = pd.read_csv(
-            processed_data_path,
-            usecols=['time', 'close', 'high', 'low', 'volume'],
-            parse_dates=['time'],
-            index_col='time',
-            dtype={'close': 'float32', 'high': 'float32', 'low': 'float32', 'volume': 'float32'}
-        )
-
-        available_start_date = self.data.index.min()
-        available_end_date = self.data.index.max()
-        start_date = max(pd.Timestamp(self.start_date), available_start_date)
-        end_date = min(pd.Timestamp(self.end_date), available_end_date)
-
-        if start_date > end_date:
-            raise ValueError("Adjusted start date is after the adjusted end date. No data available for the given range.")
-        if start_date != pd.Timestamp(self.start_date) or end_date != pd.Timestamp(self.end_date):
-            print(f"Date range adjusted based on available data: {start_date.date()} to {end_date.date()}")
-        self.data = self.data.loc[start_date:end_date]
-        if self.data.empty:
-            raise ValueError(f"No data available between {start_date} and {end_date} after adjustments.")
-
-        match = re.search(r"(\d+)min", self.filepath)
-        self.data_frequency_in_minutes = int(match.group(1)) if match else None
-
-        self.data.ffill(inplace=True)
-        self.data.reset_index(inplace=True)
-
-        self.data['close_init'] = self.data['close'].copy()
-        self.data['close_transformed'] = self.apply_wavelet_transform(self.data['close'].values)
-        self.data['close'] = self.data['close_transformed'].copy()
-
-    def apply_wavelet_transform(self, data, wavelet='db1', mode='smooth', level=1):
-        coeffs = pywt.wavedec(data, wavelet, mode=mode, level=level)
-        coeffs = [coeffs[0]] + [np.zeros_like(c) for c in coeffs[1:]]  # Keep only approximation coefficients
-        reconstructed_signal = pywt.waverec(coeffs, wavelet, mode=mode)
-
-        reconstructed_signal = reconstructed_signal[:len(data)]
-
-        return pd.Series(reconstructed_signal, index=self.data.index[:len(reconstructed_signal)])
 
     def calculate_rsi(self, rsi_period, rsi_threshold):
         rsi_period = int(rsi_period)
