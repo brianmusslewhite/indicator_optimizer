@@ -1,6 +1,5 @@
 import os
 import pandas as pd
-import re
 
 class DataLoader():
     def __init__(self, filepath, start_date, end_date):
@@ -32,9 +31,6 @@ class DataLoader():
         self.data = self.data.loc[start_date:end_date]
         if self.data.empty:
             raise ValueError(f"No data available between {start_date} and {end_date} after adjustments.")
-
-        match = re.search(r"(\d+)min", self.filepath)
-        self.data_frequency_in_minutes = int(match.group(1)) if match else None
 
         self.data.ffill(inplace=True)
         self.data.reset_index(inplace=True)

@@ -11,8 +11,10 @@ from bayes_opt import BayesianOptimization, UtilityFunction
 from joblib import Parallel, delayed
 from math import ceil
 from tqdm import tqdm
+from pyDOE import lhs
 
 from load_data import DataLoader
+from indicators import calculate_ema, calculate_obv, calculate_rsi, calculate_stochastic_oscillator
 
 MINUTES_IN_DAY = 1440
 MAX_HOLD_TIME_MINUTES = MINUTES_IN_DAY * 2
@@ -38,6 +40,8 @@ class SignalOptimizer:
         self.iter_points = iter_points
         self.pair_points = pair_points
         self.dataset_name = os.path.basename(self.filepath).split('.')[0]
+        match = re.search(r"(\d+)min", self.filepath)
+        self.data_frequency_in_minutes = int(match.group(1)) if match else None
 
         self.plot_subfolder = os.path.join('indicator_optimizer_plots', self.dataset_name)
         os.makedirs(self.plot_subfolder, exist_ok=True)
@@ -54,45 +58,11 @@ class SignalOptimizer:
 
         self.min_desired_trade_frequency_days = MIN_DESIRED_TRADE_FREQUENCY_DAYS
 
-    def calculate_rsi(self, rsi_period, rsi_threshold):
-        rsi_period = int(rsi_period)
-        delta = self.data['close'].diff(1)
-        gain = (delta.where(delta > 0, 0)).rolling(window=rsi_period).mean()
-        loss = (-delta.where(delta < 0, 0)).rolling(window=rsi_period).mean()
-        rs = gain / loss
-        rsi = 100 - (100 / (1 + rs))
-        return rsi, rsi_threshold
-
-    def calculate_ema(self, fast_period, slow_period):
-        fast_ema = self.data['close'].ewm(span=fast_period, adjust=False).mean()
-        slow_ema = self.data['close'].ewm(span=slow_period, adjust=False).mean()
-        return fast_ema, slow_ema
-
-    def calculate_stochastic_oscillator(self, k_period, slow_k_period, slow_d_period):
-        k_period = int(k_period)
-        slow_k_period = int(slow_k_period)
-        slow_d_period = int(slow_d_period)
-
-        low_min = self.data['low'].rolling(window=k_period).min()
-        high_max = self.data['high'].rolling(window=k_period).max()
-        fast_k = ((self.data['close'] - low_min) / (high_max - low_min)) * 100
-
-        slow_k = fast_k.rolling(window=slow_k_period).mean()
-        slow_d = slow_k.rolling(window=slow_d_period).mean()
-        stoch_avg = (slow_k + slow_d) / 2
-        return stoch_avg
-
-    def calculate_obv(self, ema_period):
-        ema_period = int(ema_period)
-        obv = np.where(self.data['close'] > self.data['close'].shift(), self.data['volume'], -self.data['volume']).cumsum()
-        obv_ema = pd.Series(obv).ewm(span=ema_period, adjust=False).mean()
-        return obv_ema
-
     def evaluate_performance(self, rsi_p, rsi_thr, short_ema_p, long_ema_p, ema_persist, stoch_k_p, stoch_slow_k_p, stoch_slow_d_p, stoch_thr, obv_ema_p, obv_persist, arm_pct, arm_stp_ls_pct, stp_ls_pct):
-        rsi, _ = self.calculate_rsi(rsi_p, rsi_thr)
-        fast_ema, slow_ema = self.calculate_ema(short_ema_p, long_ema_p)
-        stoch_avg = self.calculate_stochastic_oscillator(stoch_k_p, stoch_slow_k_p, stoch_slow_d_p)
-        obv_ema_values = self.calculate_obv(obv_ema_p)
+        rsi, _ = calculate_rsi(self.data, rsi_p, rsi_thr)
+        fast_ema, slow_ema = calculate_ema(self.data, short_ema_p, long_ema_p)
+        stoch_avg = calculate_stochastic_oscillator(self.data, stoch_k_p, stoch_slow_k_p, stoch_slow_d_p)
+        obv_ema_values = calculate_obv(self.data, obv_ema_p)
 
         initial_balance = 1.0
         current_balance = initial_balance
