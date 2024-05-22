@@ -30,33 +30,44 @@ def signal_handler(signum, frame):
 
 class SignalOptimizer:
     def __init__(self, filepath, pbounds, number_of_cores, start_date, end_date, init_points, iter_points, pair_points):
-        self.PBOUNDS = pbounds
+        # Basic properties
         self.filepath = filepath
-        self.number_of_cores = number_of_cores
+        self.PBOUNDS = pbounds
         self.start_date = start_date
         self.end_date = end_date
+        self.number_of_cores = number_of_cores
         self.init_points = init_points
         self.iter_points = iter_points
         self.pair_points = pair_points
+
+        # Extract dataset name and data frequency from filepath
         self.dataset_name = os.path.basename(self.filepath).split('.')[0]
         match = re.search(r"(\d+)min", self.filepath)
         self.data_frequency_in_minutes = int(match.group(1)) if match else None
 
-        self.plot_subfolder = os.path.join('indicator_optimizer_plots', self.dataset_name)
-        os.makedirs(self.plot_subfolder, exist_ok=True)
-        self.time_now = datetime.now().strftime('%Y%m%d_%H%M%S')
-
+        # Data loading
         self.data_loader = DataLoader(filepath, start_date, end_date)
         self.data = self.data_loader.data
 
+        # Directory for output plots
+        self.plot_subfolder = os.path.join('indicator_optimizer_plots', self.dataset_name)
+        os.makedirs(self.plot_subfolder, exist_ok=True)
+
+        # Timestamp for this operation
+        self.time_now = datetime.now().strftime('%Y%m%d_%H%M%S')
+
+        # Operational parameters
+        self.min_desired_trade_frequency_days = MIN_DESIRED_TRADE_FREQUENCY_DAYS
+        self.data_duration_hours = ((self.data.index.max() - self.data.index.min()) * self.data_frequency_in_minutes) / 60
+        self.bad_result_number = -500
+        self.max_penalty = 150
+
+        # Results storage
         self.best_buy_points = []
         self.best_sell_points = []
         self.best_performance = float('-inf')
         self.param_to_results = {}
         self.total_percent_gain = 0
-
-        self.min_desired_trade_frequency_days = MIN_DESIRED_TRADE_FREQUENCY_DAYS
-        self.data_duration_hours = ((self.data.index.max()-self.data.index.min())*self.data_frequency_in_minutes)/60
 
     def evaluate_performance(self, stoch_k_p, stoch_slow_k_p, stoch_slow_d_p, stoch_thr, bb_p, bb_dev_low, bb_dev_up, cci_p, stp_ls_pct, idl_trd_frq_hrs):
         stoch_avg = calculate_stochastic_oscillator(self.data, stoch_k_p, stoch_slow_k_p, stoch_slow_d_p)
@@ -123,14 +134,14 @@ class SignalOptimizer:
         if total_trades < min_trades:
             trade_deficit = min_trades - total_trades
             trade_penalty = 75 + min((math.exp(trade_deficit*.1) - 1), self.max_penalty)
-            print(f"Trade Penalty: {trade_penalty}")
+            # print(f"Trade Penalty: {trade_penalty}")
             sharpe_ratio -= trade_penalty
 
         # Penalty for profit ratio
         if profit_ratio < min_prifit_ratio:
             pr_deficit = min_prifit_ratio - profit_ratio
             pr_penalty = min((math.exp(pr_deficit*10) - 1), self.max_penalty)
-            print(f"Profit Ratio Penalty: {pr_penalty}")
+            # print(f"Profit Ratio Penalty: {pr_penalty}")
             sharpe_ratio -= pr_penalty
 
         return sharpe_ratio, buy_points, sell_points, total_percent_gain, profit_ratio
