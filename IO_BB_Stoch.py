@@ -59,9 +59,9 @@ class SignalOptimizer:
         self.data_duration_hours = ((self.data.index.max()-self.data.index.min())*self.data_frequency_in_minutes)/60
 
     def evaluate_performance(self, stoch_k_p, stoch_slow_k_p, stoch_slow_d_p, stoch_thr, bb_p, bb_dev_low, bb_dev_up, cci_p, stp_ls_pct, idl_trd_frq_hrs):
-        stoch_avg = calculate_stochastic_oscillator(stoch_k_p, stoch_slow_k_p, stoch_slow_d_p)
-        upper_band, lower_band = calculate_bollinger_bands(bb_p, bb_dev_low, bb_dev_up)
-        cci = calculate_cci(cci_p)
+        stoch_avg = calculate_stochastic_oscillator(self.data, stoch_k_p, stoch_slow_k_p, stoch_slow_d_p)
+        upper_band, lower_band = calculate_bollinger_bands(self.data, bb_p, bb_dev_low, bb_dev_up)
+        cci = calculate_cci(self.data, cci_p)
         min_trades = int(np.ceil(self.data_duration_hours / idl_trd_frq_hrs))
 
         initial_balance = 1.0
