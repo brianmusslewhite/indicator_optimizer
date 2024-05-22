@@ -12,7 +12,7 @@ from tqdm import tqdm
 from pyDOE import lhs
 
 from load_data import DataLoader
-from indicators import calculate_bollinger_bands, calculate_cci, calculate_stochastic_oscillator
+from indicators import calculate_bollinger_bands, calculate_cci, calculate_stochastic_oscillator, calculate_obv
 from plot_data import visualize_top_results, plot_trades
 
 MINUTES_IN_DAY = 1440
@@ -69,10 +69,11 @@ class SignalOptimizer:
         self.param_to_results = {}
         self.total_percent_gain = 0
 
-    def evaluate_performance(self, stoch_k_p, stoch_slow_k_p, stoch_slow_d_p, stoch_thr, bb_p, bb_dev_low, bb_dev_up, cci_p, stp_ls_pct, idl_trd_frq_hrs):
+    def evaluate_performance(self, stoch_k_p, stoch_slow_k_p, stoch_slow_d_p, stoch_thr, bb_p, bb_dev_low, bb_dev_up, cci_p, obv_p, stp_ls_pct, idl_trd_frq_hrs):
         stoch_avg = calculate_stochastic_oscillator(self.data, stoch_k_p, stoch_slow_k_p, stoch_slow_d_p)
         upper_band, lower_band = calculate_bollinger_bands(self.data, bb_p, bb_dev_low, bb_dev_up)
         cci = calculate_cci(self.data, cci_p)
+        obv = calculate_obv(self.data, obv_p)
         min_trades = int(np.ceil(self.data_duration_hours / idl_trd_frq_hrs))
 
         initial_balance = 1.0
@@ -255,6 +256,8 @@ def parse_args():
     parser.add_argument("--bb_dev_up_max", type=float, default=2.5, help="Maximum Bollinger Bands deviation")
     parser.add_argument("--cci_p_min", type=int, default=10, help="Minimum cci period")
     parser.add_argument("--cci_p_max", type=int, default=30, help="Maximum cci period")
+    parser.add_argument("--obv_p_min", type=int, default=1, help="Minimum obv period")
+    parser.add_argument("--obv_p_max", type=int, default=10, help="Maximum obv period")
     # Sell Parameters
     parser.add_argument("--stop_loss_pct_min", type=float, default=1, help="Minimum stop loss percentage")
     parser.add_argument("--stop_loss_pct_max", type=float, default=2, help="Maximum stop loss percentage")
@@ -299,6 +302,7 @@ if __name__ == "__main__":
         'bb_dev_low': (args.bb_dev_low_min, args.bb_dev_low_max),
         'bb_dev_up': (args.bb_dev_up_min, args.bb_dev_up_max),
         'cci_p': (args.cci_p_min, args.cci_p_max),
+        'obv_p': (args.obv_p_min, args.obv_p_max),
         'stp_ls_pct': (args.stop_loss_pct_min, args.stop_loss_pct_max),
         'idl_trd_frq_hrs': (args.ideal_trade_frequency_hours_min, args.ideal_trade_frequency_hours_max)
     }

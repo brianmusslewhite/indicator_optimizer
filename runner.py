@@ -23,6 +23,7 @@ configs = [
         'bb_dev_low_min': 1.0, 'bb_dev_low_max': 2.5,
         'bb_dev_up_min': 1.5, 'bb_dev_up_max': 2.5,
         'cci_p_min': 10, 'cci_p_max': 60,
+        'obv_p_min': 5, 'obv_p_max': 20,
         'stop_loss_pct_min': 0.75, 'stop_loss_pct_max': 2
     }),
 
