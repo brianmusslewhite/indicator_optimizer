@@ -34,3 +34,17 @@ def calculate_obv(data, ema_period):
     obv = np.where(data['close'] > data['close'].shift(), data['volume'], -data['volume']).cumsum()
     obv_ema = pd.Series(obv).ewm(span=ema_period, adjust=False).mean()
     return obv_ema
+
+def calculate_bollinger_bands(data, period, deviation_lower, deviation_upper):
+    period = int(period)
+    sma = data['close'].rolling(window=period).mean()
+    std = data['close'].rolling(window=period).std()
+    upper_band = sma + (std * deviation_upper)
+    lower_band = sma - (std * deviation_lower)
+    return upper_band, lower_band
+
+def calculate_cci(data, period):
+    period = int(period)
+    TP = (data['high'] + data['low'] + data['close']) / 3
+    CCI = (TP - TP.rolling(window=period).mean()) / (0.015 * TP.rolling(window=period).std())
+    return CCI
