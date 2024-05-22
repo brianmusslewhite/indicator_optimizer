@@ -9,7 +9,7 @@ elif os_name == "Windows":
     python_version = 'python'
 
 configs = [
-    ("ETHXBT_30min_Kraken.csv", {
+    ("ETHXBT_15min_Kraken.csv", {
         'start_date': '2023-11-1', 'end_date': '2023-12-31',
         'ideal_trade_frequency_hours_min': (24*1),
         'ideal_trade_frequency_hours_max': (24*7),
@@ -24,6 +24,7 @@ configs = [
         'bb_dev_up_min': 1.5, 'bb_dev_up_max': 2.5,
         'cci_p_min': 10, 'cci_p_max': 60,
         'obv_p_min': 5, 'obv_p_max': 20,
+        'obv_persist_min': 1, 'obv_persist_max': 7,
         'stop_loss_pct_min': 0.75, 'stop_loss_pct_max': 2
     }),
 
@@ -103,6 +104,7 @@ for filename, inputs in configs:
         '--bb_dev_up_max', str(inputs['bb_dev_up_max']),
         '--cci_p_min', str(inputs['cci_p_min']),
         '--cci_p_max', str(inputs['cci_p_max']),
+        
         '--stop_loss_pct_min', str(inputs['stop_loss_pct_min']),
         '--stop_loss_pct_max', str(inputs['stop_loss_pct_max']),
         '--number_of_cores', str(n_jobs),

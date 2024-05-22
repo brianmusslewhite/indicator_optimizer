@@ -69,7 +69,7 @@ class SignalOptimizer:
         self.param_to_results = {}
         self.total_percent_gain = 0
 
-    def evaluate_performance(self, stoch_k_p, stoch_slow_k_p, stoch_slow_d_p, stoch_thr, bb_p, bb_dev_low, bb_dev_up, cci_p, obv_p, stp_ls_pct, idl_trd_frq_hrs):
+    def evaluate_performance(self, stoch_k_p, stoch_slow_k_p, stoch_slow_d_p, stoch_thr, bb_p, bb_dev_low, bb_dev_up, cci_p, obv_p, obv_persist, stp_ls_pct, idl_trd_frq_hrs):
         stoch_avg = calculate_stochastic_oscillator(self.data, stoch_k_p, stoch_slow_k_p, stoch_slow_d_p)
         upper_band, lower_band = calculate_bollinger_bands(self.data, bb_p, bb_dev_low, bb_dev_up)
         cci = calculate_cci(self.data, cci_p)
@@ -87,6 +87,9 @@ class SignalOptimizer:
         trade_results = []
         min_prifit_ratio = 0.9
 
+        obv_signal_active = False
+        obv_signal_counter = 0
+
         for i in range(1, len(self.data)):
             current_price = self.data['close'].iloc[i]
             signals_met = 0
@@ -97,6 +100,15 @@ class SignalOptimizer:
                 signals_met += 1
             if (0 >= cci.iloc[i] >= -100):
                 signals_met += 1
+            if obv.iloc[i] > obv.iloc[i-1]:
+                signals_met += 1
+                obv_signal_active = True
+                obv_signal_counter = 0
+            elif obv_signal_active:
+                obv_signal_counter += 1
+                signals_met += 1
+                if obv_signal_counter >= obv_persist:
+                    obv_signal_active = False
 
             # Logic for opening position
             if signals_met >= 3 and not position_open:
@@ -258,6 +270,8 @@ def parse_args():
     parser.add_argument("--cci_p_max", type=int, default=30, help="Maximum cci period")
     parser.add_argument("--obv_p_min", type=int, default=1, help="Minimum obv period")
     parser.add_argument("--obv_p_max", type=int, default=10, help="Maximum obv period")
+    parser.add_argument("--obv_persistence_min", type=int, default=1, help="Minimum OBV persistence")
+    parser.add_argument("--obv_persistence_max", type=int, default=4, help="Maximum OBV persistence")
     # Sell Parameters
     parser.add_argument("--stop_loss_pct_min", type=float, default=1, help="Minimum stop loss percentage")
     parser.add_argument("--stop_loss_pct_max", type=float, default=2, help="Maximum stop loss percentage")
@@ -303,6 +317,7 @@ if __name__ == "__main__":
         'bb_dev_up': (args.bb_dev_up_min, args.bb_dev_up_max),
         'cci_p': (args.cci_p_min, args.cci_p_max),
         'obv_p': (args.obv_p_min, args.obv_p_max),
+        'obv_persist': (args.obv_persistence_min, args.obv_persistence_max),
         'stp_ls_pct': (args.stop_loss_pct_min, args.stop_loss_pct_max),
         'idl_trd_frq_hrs': (args.ideal_trade_frequency_hours_min, args.ideal_trade_frequency_hours_max)
     }
