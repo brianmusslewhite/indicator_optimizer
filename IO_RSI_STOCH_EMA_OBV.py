@@ -1,9 +1,6 @@
 import argparse
-import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
 import re
-import seaborn as sns
 import signal
 import os
 from datetime import datetime
@@ -15,6 +12,7 @@ from pyDOE import lhs
 
 from load_data import DataLoader
 from indicators import calculate_ema, calculate_obv, calculate_rsi, calculate_stochastic_oscillator
+from plot_data import visualize_top_results, plot_trades
 
 MINUTES_IN_DAY = 1440
 MAX_HOLD_TIME_MINUTES = MINUTES_IN_DAY * 2
@@ -266,43 +264,6 @@ class SignalOptimizer:
         self.top_results = sorted_results[:self.pair_points] if len(sorted_results) >= self.pair_points else sorted_results
         return self.top_results
 
-    def visualize_top_results(self):
-        if not self.top_results:
-            print("No results to visualize.")
-            return
-
-        results_df = pd.DataFrame([res['params'] for res in self.top_results])
-        results_df['profit'] = [res['target'] for res in self.top_results]
-        filtered_results_df = results_df[results_df['profit'] != 0]
-
-        if filtered_results_df.empty:
-            print("No results to visualize after filtering out zero profits.")
-            return
-
-        pairplot = sns.pairplot(filtered_results_df, diag_kind='kde', plot_kws={'alpha': 0.6, 's': 80, 'edgecolor': 'k'}, height=2)
-        pairplot.figure.suptitle(f'{self.dataset_name}', size=12)
-
-        filename = f"{self.dataset_name}_PairPlot_{self.start_date}_to_{self.end_date}_Date_{self.time_now}.png"
-        plt.savefig(os.path.join(self.plot_subfolder, filename))
-        # plt.show()
-
-    def plot_trades(self, buy_points, sell_points):
-        plt.figure(figsize=(14, 7))
-        plt.plot(self.data['time'], self.data['close_init'], label='Close Price', alpha=0.3, color='#7f7f7f')
-        plt.plot(self.data['time'], self.data['close_transformed'], label='Wavelet Transformed Close Price', alpha=0.5, linestyle='--', color='#1f77b4')
-
-        plt.scatter(self.data.loc[self.data.index.isin(buy_points), 'time'], self.data.loc[self.data.index.isin(buy_points), 'close'], label='Buy', marker='^', color='green', alpha=1)
-        plt.scatter(self.data.loc[self.data.index.isin(sell_points), 'time'], self.data.loc[self.data.index.isin(sell_points), 'close'], label='Sell', marker='v', color='red', alpha=1)
-
-        plt.title(f'{self.dataset_name}_{self.start_date}_to_{self.end_date}')
-        plt.xlabel('Time')
-        plt.ylabel('Price')
-        plt.legend()
-
-        filename = f"{self.dataset_name}_BUYSELLResults_{self.start_date}_to_{self.end_date}_Date_{self.time_now}.png"
-        plt.savefig(os.path.join(self.plot_subfolder, filename))
-        plt.show()
-
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Run Signal Optimizer")
@@ -364,8 +325,8 @@ def run_optimization(filename, pbounds, number_of_cores, start_date, end_date, i
         print(f"Profit Ratio: {profit_ratio}")
         print(f"Percent Gain: {total_percent_gain}")
 
-        optimizer.visualize_top_results()
-        optimizer.plot_trades(final_buy_points, final_sell_points)
+        visualize_top_results(top_results, optimizer.dataset_name, optimizer.start_date, optimizer.end_date, optimizer.time_now, optimizer.plot_subfolder)
+        plot_trades(optimizer.data, final_buy_points, final_sell_points, optimizer.dataset_name, optimizer.start_date, optimizer.end_date, optimizer.time_now, optimizer.plot_subfolder)
 
 
 if __name__ == "__main__":
