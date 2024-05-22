@@ -1,16 +1,10 @@
 import pandas as pd
 import os
+from concurrent.futures import ThreadPoolExecutor
 
 
-def process_trading_history(file_path, data_frequency_minutes):
-    output_folder = "Processed Data"
-
-    # Create the output folder if it does not exist
-    if not os.path.exists(output_folder):
-        os.makedirs(output_folder)
-
+def process_trading_history(file_path, data_frequency_minutes, output_folder):
     try:
-        # Load the data
         df = pd.read_csv(file_path, header=None)
         df.columns = ['timestamp', 'price', 'volume']
 
@@ -23,16 +17,13 @@ def process_trading_history(file_path, data_frequency_minutes):
         volume = df['volume'].resample(f'{data_frequency_minutes}min').sum()
         ohlcv.ffill(inplace=True)
 
-        # Adjust the DataFrame to match expected column names
-        ohlcv['volume'] = volume  # Renamed from 'volumefrom' to 'volume'
-        ohlcv = ohlcv[['open', 'high', 'low', 'close', 'volume']]
+        # Add volume and column names
+        ohlcv = ohlcv[['open', 'high', 'low', 'close']]
+        ohlcv['volume'] = volume
 
         # Reset index
         ohlcv = ohlcv.reset_index()
         ohlcv.columns = ['time', 'open', 'high', 'low', 'close', 'volume']
-
-        # Optionally, you might want to drop the 'open' column if not used
-        ohlcv.drop(columns=['open'], inplace=True)
 
         # Construct output file path
         base_name = os.path.basename(file_path)
@@ -46,22 +37,27 @@ def process_trading_history(file_path, data_frequency_minutes):
         print(f"Error processing {file_path}: {e}")
 
 
-file_paths = [
-    r'~/Downloads/Kraken_Trading_History/DASHXBT.csv',
-    r'~/Downloads/Kraken_Trading_History/MATICXBT.csv',
-    r'~/Downloads/Kraken_Trading_History/LINKXBT.csv',
-    r'~/Downloads/Kraken_Trading_History/BCHXBT.csv',
-    r'~/Downloads/Kraken_Trading_History/ETHXBT.csv',
-    r'~/Downloads/Kraken_Trading_History/EOSXBT.csv',
-    r'~/Downloads/Kraken_Trading_History/XRPXBT.csv',
-    r'~/Downloads/Kraken_Trading_History/LTCXBT.csv',
-    r'~/Downloads/Kraken_Trading_History/XDGXBT.csv',
-    r'~/Downloads/Kraken_Trading_History/XLMXBT.csv',
-    r'~/Downloads/Kraken_Trading_History/XRPXBT.csv'
-]
+if __name__ == "__main__":
+    data_frequency_minutes = [5, 15, 30]
+    output_folder = "Processed Data"
+    file_paths = [
+        r'~/Downloads/Kraken_Trading_History/DASHXBT.csv',
+        r'~/Downloads/Kraken_Trading_History/MATICXBT.csv',
+        r'~/Downloads/Kraken_Trading_History/LINKXBT.csv',
+        r'~/Downloads/Kraken_Trading_History/BCHXBT.csv',
+        r'~/Downloads/Kraken_Trading_History/ETHXBT.csv',
+        r'~/Downloads/Kraken_Trading_History/EOSXBT.csv',
+        r'~/Downloads/Kraken_Trading_History/XRPXBT.csv',
+        r'~/Downloads/Kraken_Trading_History/LTCXBT.csv',
+        r'~/Downloads/Kraken_Trading_History/XDGXBT.csv',
+        r'~/Downloads/Kraken_Trading_History/XLMXBT.csv',
+        r'~/Downloads/Kraken_Trading_History/XRPXBT.csv'
+    ]
 
-data_frequency_minutes = [5, 15]
+    if not os.path.exists(output_folder):
+        os.makedirs(output_folder)
 
-for file_path in file_paths:
-    for frequency in data_frequency_minutes:
-        process_trading_history(file_path, frequency)
+    with ThreadPoolExecutor() as executor:
+        for file_path in file_paths:
+            for frequency in data_frequency_minutes:
+                executor.submit(process_trading_history, file_path, frequency, output_folder)
