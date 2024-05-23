@@ -60,8 +60,11 @@ def plot_parameter_sensitivity(results, dataset_name, start_date, end_date, time
     for i, param in enumerate(positive_results_df.columns[:-1]):  # exclude the profit column
         sns.scatterplot(x=param, y='profit', data=positive_results_df, ax=axs[i], color='blue', edgecolor='black')
         axs[i].set_ylabel('Profit')
-        axs[i].text(0.01, 0.15, f'{param}', transform=axs[i].transAxes, verticalalignment='top', fontsize=18, color='black')
-    plt.tight_layout()
+        axs[i].text(0.01, 0.95, f'{param}', transform=axs[i].transAxes, verticalalignment='top', fontsize=18, color='black')
+        axs[i].set_xlabel('')
+    
+    plt.tight_layout(rect=[0, 0, 1, 0.96])
+    fig.suptitle(f'{dataset_name}_{start_date}_to_{end_date}')
 
     filename = f"{dataset_name}_Sensitivity_{start_date}_to_{end_date}_Date_{time_now}.png"
     plt.savefig(os.path.join(plot_subfolder, filename))
