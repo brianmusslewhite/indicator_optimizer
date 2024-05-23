@@ -12,7 +12,7 @@ from tqdm import tqdm
 from pyDOE import lhs
 
 from load_data import DataLoader
-from indicators import calculate_bollinger_bands, calculate_cci, calculate_stochastic_oscillator, calculate_obv
+from indicators import calculate_bollinger_bands, calculate_cci, calculate_obv
 from plot_data import visualize_top_results, plot_trades, plot_parameter_sensitivity
 
 MINUTES_IN_DAY = 1440
@@ -82,7 +82,7 @@ class SignalOptimizer:
         buy_points = []
         sell_points = []
         trade_results = []
-        min_prifit_ratio = 0.7
+        min_prifit_ratio = 0.8
 
         obv_signal_active = False
         obv_signal_counter = 0
@@ -129,15 +129,15 @@ class SignalOptimizer:
 
         # Penalty for trade frequency
         if total_trades < min_trades:
-            trade_deficit = min_trades - total_trades
-            trade_penalty = 75 + min((math.exp(trade_deficit*.1) - 1), self.max_penalty)
+            trade_deficit_normal = (min_trades - total_trades) / min_trades
+            trade_penalty = 2*math.exp(trade_deficit_normal)
             # print(f"Trade Penalty: {trade_penalty}")
             performance -= trade_penalty
 
         # Penalty for profit ratio
         if profit_ratio < min_prifit_ratio:
-            pr_deficit = min_prifit_ratio - profit_ratio
-            pr_penalty = min((math.exp(pr_deficit*10) - 1), self.max_penalty)
+            pr_deficit_normal = (min_prifit_ratio - profit_ratio) / min_prifit_ratio
+            pr_penalty = 2*math.exp(pr_deficit_normal)
             # print(f"Profit Ratio Penalty: {pr_penalty}")
             performance -= pr_penalty
 
