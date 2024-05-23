@@ -13,7 +13,7 @@ from pyDOE import lhs
 
 from load_data import DataLoader
 from indicators import calculate_bollinger_bands, calculate_cci, calculate_stochastic_oscillator, calculate_obv
-from plot_data import visualize_top_results, plot_trades
+from plot_data import visualize_top_results, plot_trades, plot_parameter_sensitivity
 
 MINUTES_IN_DAY = 1440
 MAX_HOLD_TIME_MINUTES = MINUTES_IN_DAY * 2
@@ -29,7 +29,7 @@ def signal_handler(signum, frame):
 
 
 class SignalOptimizer:
-    def __init__(self, filepath, pbounds, number_of_cores, start_date, end_date, init_points, iter_points, pair_points):
+    def __init__(self, filepath, pbounds, number_of_cores, start_date, end_date, init_points, iter_points):
         # Basic properties
         self.filepath = filepath
         self.PBOUNDS = pbounds
@@ -38,7 +38,6 @@ class SignalOptimizer:
         self.number_of_cores = number_of_cores
         self.init_points = init_points
         self.iter_points = iter_points
-        self.pair_points = pair_points
 
         # Extract dataset name and data frequency from filepath
         self.dataset_name = os.path.basename(self.filepath).split('.')[0]
@@ -69,11 +68,10 @@ class SignalOptimizer:
         self.param_to_results = {}
         self.total_percent_gain = 0
 
-    def evaluate_performance(self, stoch_k_p, stoch_slow_k_p, stoch_slow_d_p, stoch_thr, bb_p, bb_dev_low, bb_dev_up, cci_p, obv_p, obv_persist, stp_ls_pct, idl_trd_frq_hrs):
-        stoch_avg = calculate_stochastic_oscillator(self.data, stoch_k_p, stoch_slow_k_p, stoch_slow_d_p)
-        upper_band, lower_band = calculate_bollinger_bands(self.data, bb_p, bb_dev_low, bb_dev_up)
-        cci = calculate_cci(self.data, cci_p)
-        obv = calculate_obv(self.data, obv_p)
+    def evaluate_performance(self, bb_p, bb_dev_low, bb_dev_up, cci_p, obv_p, obv_persist, stp_ls_pct, idl_trd_frq_hrs):
+        upper_band, lower_band = calculate_bollinger_bands(self.data, int(bb_p), bb_dev_low, bb_dev_up)
+        cci = calculate_cci(self.data, int(cci_p))
+        obv = calculate_obv(self.data, int(obv_p))
         min_trades = int(np.ceil(self.data_duration_hours / idl_trd_frq_hrs))
 
         initial_balance = 1.0
@@ -83,9 +81,8 @@ class SignalOptimizer:
         entry_price = 0.0
         buy_points = []
         sell_points = []
-        equity_curve = [1]
         trade_results = []
-        min_prifit_ratio = 0.9
+        min_prifit_ratio = 0.7
 
         obv_signal_active = False
         obv_signal_counter = 0
@@ -94,8 +91,6 @@ class SignalOptimizer:
             current_price = self.data['close'].iloc[i]
             signals_met = 0
 
-            if stoch_avg.iloc[i] <= stoch_thr:
-                signals_met += 1
             if current_price < lower_band.iloc[i]:
                 signals_met += 1
             if (0 >= cci.iloc[i] >= -100):
@@ -125,20 +120,9 @@ class SignalOptimizer:
                     trade_results.append(trade_return)
                     current_balance *= (1 + trade_return)
                     position_open = False
-                    equity_curve.append(current_balance / initial_balance)  # Normalize to initial balance for comparability
-
-        # Calculate daily log returns for the equity curve
-        log_returns = np.diff(np.log(equity_curve))
-
-        if len(log_returns) < 2:
-            sharpe_ratio = self.bad_result_number
-        else:
-            mean_log_return = np.mean(log_returns)
-            std_log_return = np.std(log_returns)
-            risk_free_rate = 0.0
-            sharpe_ratio = (mean_log_return - risk_free_rate) / std_log_return if std_log_return > 0 else self.bad_result_number
 
         total_percent_gain = (current_balance - initial_balance) / initial_balance * 100
+        performance = total_percent_gain
         total_trades = len(trade_results)
         profitable_trades = sum(1 for result in trade_results if result > 0)
         profit_ratio = profitable_trades / total_trades if total_trades > 0 else 0
@@ -148,20 +132,20 @@ class SignalOptimizer:
             trade_deficit = min_trades - total_trades
             trade_penalty = 75 + min((math.exp(trade_deficit*.1) - 1), self.max_penalty)
             # print(f"Trade Penalty: {trade_penalty}")
-            sharpe_ratio -= trade_penalty
+            performance -= trade_penalty
 
         # Penalty for profit ratio
         if profit_ratio < min_prifit_ratio:
             pr_deficit = min_prifit_ratio - profit_ratio
             pr_penalty = min((math.exp(pr_deficit*10) - 1), self.max_penalty)
             # print(f"Profit Ratio Penalty: {pr_penalty}")
-            sharpe_ratio -= pr_penalty
+            performance -= pr_penalty
 
-        return sharpe_ratio, buy_points, sell_points, total_percent_gain, profit_ratio
+        return performance, buy_points, sell_points, total_percent_gain, profit_ratio
 
     def evaluate_wrapper(self, params):
-        performance, buy_points, sell_points, _, _,  = self.evaluate_performance(**params)
-        self.param_to_results[str(params)] = (buy_points, sell_points)
+        performance, _, _, total_percent_gain, profit_ratio = self.evaluate_performance(**params)
+        print(f"Performance: {performance:8.2f}, Profit Ratio: {profit_ratio:8.2f}, Total Percent Gain: {total_percent_gain:8.2f}")
         return performance
 
     def generate_lhs_samples(self, pbounds, num_samples):
@@ -189,7 +173,6 @@ class SignalOptimizer:
             verbose=2,
             allow_duplicate_points=True
         )
-        utility = UtilityFunction(kind="ucb", kappa=2.5, xi=0.0)
         init_points = self.generate_lhs_samples(self.PBOUNDS, self.init_points)
 
         batch_size = self.number_of_cores
@@ -225,27 +208,42 @@ class SignalOptimizer:
             pbar_counter = 0
             top_performance = 0
             with tqdm(total=self.iter_points, desc=f"Optimizing {self.filepath}") as pbar:
-                for _ in range(self.iter_points):
+                initial_kappa = 15.0
+                min_kappa = 2.576
+                decay_rate_kappa = 0.1
+
+                initial_xi = 0.1
+                final_xi = 0.01
+                decay_rate_xi = 0.005
+                for i in range(self.iter_points):
                     if INTERRUPTED:
                         print("Ctrl+C, breaking out of initial processing.")
                         break
+
+                    current_kappa = max(min_kappa, initial_kappa - decay_rate_kappa * i)
+                    current_xi = max(final_xi, initial_xi - decay_rate_xi * i)
+                    utility = UtilityFunction(kind="ucb", kappa=current_kappa, xi=current_xi)
+
                     next_params = optimizer.suggest(utility)
                     performance, buy_points, sell_points, total_percent_gain, profit_ratio = self.evaluate_performance(**next_params)
                     optimizer.register(params=next_params, target=performance)
                     pbar_counter += 1
+
                     if pbar_counter % 100 == 0:
                         pbar.update(100)
+                        print()
                     if performance > top_performance:
                         top_performance = performance
-                        print(f"New top performance: {performance:.2f}, Profit Ratio: {profit_ratio}, Total percent gain: {total_percent_gain:.2f}")
+                        print(f"New top performance: {performance:8.2f}, Profit Ratio: {profit_ratio:8.2f}, Total percent gain: {total_percent_gain:8.2f}")
+                    else:
+                        print(f"Performance: {performance:8.2f}, Profit Ratio: {profit_ratio:8.2f}, Total Percent Gain: {total_percent_gain:8.2f}")
 
         except KeyboardInterrupt:
             print("\nOptimization interrupted by user. Proceeding with results obtained so far.")
 
         # Process and return the results obtained so far, regardless of whether there was an interruption
         sorted_results = sorted(optimizer.res, key=lambda x: x['target'], reverse=True)
-        self.top_results = sorted_results[:self.pair_points] if len(sorted_results) >= self.pair_points else sorted_results
-        return self.top_results
+        return sorted_results
 
 
 def parse_args():
@@ -270,8 +268,8 @@ def parse_args():
     parser.add_argument("--cci_p_max", type=int, default=30, help="Maximum cci period")
     parser.add_argument("--obv_p_min", type=int, default=1, help="Minimum obv period")
     parser.add_argument("--obv_p_max", type=int, default=10, help="Maximum obv period")
-    parser.add_argument("--obv_persistence_min", type=int, default=1, help="Minimum OBV persistence")
-    parser.add_argument("--obv_persistence_max", type=int, default=4, help="Maximum OBV persistence")
+    parser.add_argument("--obv_persist_min", type=int, default=1, help="Minimum OBV persistence")
+    parser.add_argument("--obv_persist_max", type=int, default=4, help="Maximum OBV persistence")
     # Sell Parameters
     parser.add_argument("--stop_loss_pct_min", type=float, default=1, help="Minimum stop loss percentage")
     parser.add_argument("--stop_loss_pct_max", type=float, default=2, help="Maximum stop loss percentage")
@@ -288,12 +286,12 @@ def parse_args():
     return parser.parse_args()
 
 
-def run_optimization(filename, pbounds, number_of_cores, start_date, end_date, init_points, iter_points, pair_points):
-    optimizer = SignalOptimizer(filename, pbounds, number_of_cores, start_date, end_date, init_points, iter_points, pair_points)
-    top_results = optimizer.optimize()
+def run_optimization(filename, pbounds, number_of_cores, start_date, end_date, init_points, iter_points):
+    optimizer = SignalOptimizer(filename, pbounds, number_of_cores, start_date, end_date, init_points, iter_points)
+    sorted_results = optimizer.optimize()
 
-    if top_results:
-        best_params = top_results[0]['params']
+    if sorted_results:
+        best_params = sorted_results[0]['params']
         final_performance, final_buy_points, final_sell_points, total_percent_gain, profit_ratio = optimizer.evaluate_performance(**best_params)
 
         print(f"Optimized Indicator Parameters: {best_params}")
@@ -301,25 +299,25 @@ def run_optimization(filename, pbounds, number_of_cores, start_date, end_date, i
         print(f"Profit Ratio: {profit_ratio}")
         print(f"Percent Gain: {total_percent_gain}")
 
-        visualize_top_results(top_results, optimizer.dataset_name, optimizer.start_date, optimizer.end_date, optimizer.time_now, optimizer.plot_subfolder)
+        visualize_top_results(sorted_results, optimizer.dataset_name, optimizer.start_date, optimizer.end_date, optimizer.time_now, optimizer.plot_subfolder)
         plot_trades(optimizer.data, final_buy_points, final_sell_points, optimizer.dataset_name, optimizer.start_date, optimizer.end_date, optimizer.time_now, optimizer.plot_subfolder)
-
+        plot_parameter_sensitivity(sorted_results, optimizer.dataset_name, start_date, end_date, optimizer.time_now, optimizer.plot_subfolder)
 
 if __name__ == "__main__":
     args = parse_args()
     PBOUNDS = {
-        'stoch_k_p': (args.stoch_k_period_min, args.stoch_k_period_max),
-        'stoch_slow_k_p': (args.stoch_slowing_min, args.stoch_slowing_max),
-        'stoch_slow_d_p': (args.stoch_d_period_min, args.stoch_d_period_max),
-        'stoch_thr': (args.stoch_threshold_min, args.stoch_threshold_max),
+        # 'stoch_k_p': (args.stoch_k_period_min, args.stoch_k_period_max),
+        # 'stoch_slow_k_p': (args.stoch_slowing_min, args.stoch_slowing_max),
+        # 'stoch_slow_d_p': (args.stoch_d_period_min, args.stoch_d_period_max),
+        # 'stoch_thr': (args.stoch_threshold_min, args.stoch_threshold_max),
         'bb_p': (args.bb_period_min, args.bb_period_max),
         'bb_dev_low': (args.bb_dev_low_min, args.bb_dev_low_max),
         'bb_dev_up': (args.bb_dev_up_min, args.bb_dev_up_max),
         'cci_p': (args.cci_p_min, args.cci_p_max),
         'obv_p': (args.obv_p_min, args.obv_p_max),
-        'obv_persist': (args.obv_persistence_min, args.obv_persistence_max),
+        'obv_persist': (args.obv_persist_min, args.obv_persist_max),
         'stp_ls_pct': (args.stop_loss_pct_min, args.stop_loss_pct_max),
         'idl_trd_frq_hrs': (args.ideal_trade_frequency_hours_min, args.ideal_trade_frequency_hours_max)
     }
 
-    run_optimization(args.filename, PBOUNDS, args.number_of_cores, args.start_date, args.end_date, args.init_points, args.iter_points, args.pair_points)
+    run_optimization(args.filename, PBOUNDS, args.number_of_cores, args.start_date, args.end_date, args.init_points, args.iter_points)

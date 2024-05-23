@@ -11,73 +11,22 @@ elif os_name == "Windows":
 configs = [
     ("ETHXBT_15min_Kraken.csv", {
         'start_date': '2023-11-1', 'end_date': '2023-12-31',
-        'ideal_trade_frequency_hours_min': (24*1),
+        'ideal_trade_frequency_hours_min': (12),
         'ideal_trade_frequency_hours_max': (24*7),
-        'init_points': 500, 'iter_points': 10000,
-        'pair_points': 1000,
-        'stoch_k_period_min': 14, 'stoch_k_period_max': 24,
-        'stoch_d_period_min': 3, 'stoch_d_period_max': 8,
-        'stoch_slowing_min': 1, 'stoch_slowing_max': 5,
-        'stoch_threshold_min': 30, 'stoch_threshold_max': 80,
-        'bb_p_min': 12, 'bb_p_max': 25,
-        'bb_dev_low_min': 1.0, 'bb_dev_low_max': 2.5,
-        'bb_dev_up_min': 1.5, 'bb_dev_up_max': 2.5,
-        'cci_p_min': 10, 'cci_p_max': 60,
-        'obv_p_min': 5, 'obv_p_max': 20,
-        'obv_persist_min': 1, 'obv_persist_max': 7,
-        'stop_loss_pct_min': 0.75, 'stop_loss_pct_max': 2
+        'init_points': 500, 'iter_points': 1000,
+        'stoch_k_period_min': 10, 'stoch_k_period_max': 30,
+        'stoch_d_period_min': 3, 'stoch_d_period_max': 10,
+        'stoch_slowing_min': 1, 'stoch_slowing_max': 8,
+        'stoch_threshold_min': 20, 'stoch_threshold_max': 90,
+        'bb_p_min': 10, 'bb_p_max': 40,
+        'bb_dev_low_min': 0.5, 'bb_dev_low_max': 3.0,
+        'bb_dev_up_min': 0.5, 'bb_dev_up_max': 3.0,
+        'cci_p_min': 5, 'cci_p_max': 100,
+        'obv_p_min': 3, 'obv_p_max': 30,
+        'obv_persist_min': 1, 'obv_persist_max': 10,
+        'stop_loss_pct_min': 0.5, 'stop_loss_pct_max': 3
     }),
 
-    # ("LTCXBT_30min_Kraken.csv", {
-    #     'start_date': '2023-11-1', 'end_date': '2023-12-31',
-    #     'ideal_trade_frequency_hours_min': (24*1),
-    #     'ideal_trade_frequency_hours_max': (24*7),
-    #     'init_points': 500, 'iter_points': 10000,
-    #     'pair_points': 1000,
-    #     'stoch_k_period_min': 14, 'stoch_k_period_max': 24,
-    #     'stoch_d_period_min': 3, 'stoch_d_period_max': 8,
-    #     'stoch_slowing_min': 1, 'stoch_slowing_max': 5,
-    #     'stoch_threshold_min': 30, 'stoch_threshold_max': 80,
-    #     'bb_p_min': 12, 'bb_p_max': 25,
-    #     'bb_dev_low_min': 1.0, 'bb_dev_low_max': 2.5,
-    #     'bb_dev_up_min': 1.5, 'bb_dev_up_max': 2.5,
-    #     'cci_p_min': 10, 'cci_p_max': 60,
-    #     'stop_loss_pct_min': 0.75, 'stop_loss_pct_max': 2
-    # }),
-
-    # ("MATICXBT_30min_Kraken.csv", {
-    #     'start_date': '2023-11-1', 'end_date': '2023-12-31',
-    #     'ideal_trade_frequency_hours_min': (24*1),
-    #     'ideal_trade_frequency_hours_max': (24*7),
-    #     'init_points': 500, 'iter_points': 10000,
-    #     'pair_points': 1000,
-    #     'stoch_k_period_min': 14, 'stoch_k_period_max': 24,
-    #     'stoch_d_period_min': 3, 'stoch_d_period_max': 8,
-    #     'stoch_slowing_min': 1, 'stoch_slowing_max': 5,
-    #     'stoch_threshold_min': 30, 'stoch_threshold_max': 80,
-    #     'bb_p_min': 12, 'bb_p_max': 25,
-    #     'bb_dev_low_min': 1.0, 'bb_dev_low_max': 2.5,
-    #     'bb_dev_up_min': 1.5, 'bb_dev_up_max': 2.5,
-    #     'cci_p_min': 10, 'cci_p_max': 60,
-    #     'stop_loss_pct_min': 0.75, 'stop_loss_pct_max': 2
-    # }),
-
-    # ("XDGXBT_30min_Kraken.csv", {
-    #     'start_date': '2023-11-1', 'end_date': '2023-12-31',
-    #     'ideal_trade_frequency_hours_min': (24*1),
-    #     'ideal_trade_frequency_hours_max': (24*7),
-    #     'init_points': 500, 'iter_points': 10000,
-    #     'pair_points': 1000,
-    #     'stoch_k_period_min': 14, 'stoch_k_period_max': 24,
-    #     'stoch_d_period_min': 3, 'stoch_d_period_max': 8,
-    #     'stoch_slowing_min': 1, 'stoch_slowing_max': 5,
-    #     'stoch_threshold_min': 30, 'stoch_threshold_max': 80,
-    #     'bb_p_min': 12, 'bb_p_max': 25,
-    #     'bb_dev_low_min': 1.0, 'bb_dev_low_max': 2.5,
-    #     'bb_dev_up_min': 1.5, 'bb_dev_up_max': 2.5,
-    #     'cci_p_min': 10, 'cci_p_max': 60,
-    #     'stop_loss_pct_min': 0.75, 'stop_loss_pct_max': 2
-    # }),
 ]
 
 num_cpu_cores = multiprocessing.cpu_count()
@@ -86,7 +35,7 @@ n_jobs = max(1, num_cpu_cores // len(configs))
 
 for filename, inputs in configs:
     command = ' '.join([
-        python_version, 'IO_BB_Stoch.py',
+        python_version, 'optimizer.py',
         '--filename', filename,
         '--stoch_k_period_min', str(inputs['stoch_k_period_min']),
         '--stoch_k_period_max', str(inputs['stoch_k_period_max']),
@@ -104,7 +53,10 @@ for filename, inputs in configs:
         '--bb_dev_up_max', str(inputs['bb_dev_up_max']),
         '--cci_p_min', str(inputs['cci_p_min']),
         '--cci_p_max', str(inputs['cci_p_max']),
-        
+        '--obv_p_min', str(inputs['obv_p_min']),
+        '--obv_p_max', str(inputs['obv_p_max']),
+        '--obv_persist_min', str(inputs['obv_persist_min']),
+        '--obv_persist_max', str(inputs['obv_persist_max']),
         '--stop_loss_pct_min', str(inputs['stop_loss_pct_min']),
         '--stop_loss_pct_max', str(inputs['stop_loss_pct_max']),
         '--number_of_cores', str(n_jobs),
@@ -114,7 +66,6 @@ for filename, inputs in configs:
         '--ideal_trade_frequency_hours_max', str(inputs['ideal_trade_frequency_hours_max']),
         '--init_points', str(inputs['init_points']),
         '--iter_points', str(inputs['iter_points']),
-        '--pair_points', str(inputs['pair_points']),
     ])
 
     if os_name == "Linux" or os_name == "Darwin":
