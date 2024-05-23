@@ -68,11 +68,11 @@ class SignalOptimizer:
         self.param_to_results = {}
         self.total_percent_gain = 0
 
-    def evaluate_performance(self, bb_p, bb_dev_low, bb_dev_up, macd_fast_p, macd_slow_p, macd_sig_p, obv_p, obv_persist, rsi_p, stp_ls_pct, idl_trd_frq_hrs):
-        upper_band, lower_band = calculate_bollinger_bands(self.data, int(bb_p), bb_dev_low, bb_dev_up)
-        macd, signal_line = calculate_macd(macd_fast_p, macd_slow_p, int(macd_sig_p))
+    def evaluate_performance(self, bb_p, bb_dev_low, bb_dev_up, macd_fast_p, macd_slow_p, macd_sig_p, macd_persist, obv_p, obv_persist, rsi_p, rsi_th_buy, rsi_th_sell, stp_ls_pct, idl_trd_frq_hrs):
+        bb_upper_band, bb_lower_band = calculate_bollinger_bands(self.data, int(bb_p), bb_dev_low, bb_dev_up)
+        macd, macd_signal = calculate_macd(self.data, macd_fast_p, macd_slow_p, int(macd_sig_p))
         obv = calculate_obv(self.data, int(obv_p))
-        rsi = calculate_rsi(self.data, rsi_p)
+        rsi = calculate_rsi(self.data, int(rsi_p))
         min_trades = int(np.ceil(self.data_duration_hours / idl_trd_frq_hrs))
 
         initial_balance = 1.0
@@ -87,16 +87,26 @@ class SignalOptimizer:
 
         obv_signal_active = False
         obv_signal_counter = 0
+        macd_signal_active = False
+        macd_signal_counter = 0
 
         for i in range(1, len(self.data)):
             current_price = self.data['close'].iloc[i]
             signals_met = 0
 
-            if macd.iloc[i] > signal_line.iloc[i] and macd.iloc[i-1] <= signal_line.iloc[i-1]:
+            if macd.iloc[i] > macd_signal.iloc[i] and macd.iloc[i-1] <= macd_signal.iloc[i-1]:
                 signals_met += 1
-            if current_price < lower_band.iloc[i]:
+                macd_signal_active = True
+                macd_signal_counter = 0
+            elif macd_signal_active:
                 signals_met += 1
-            
+                macd_signal_counter += 1
+                if macd_signal_counter >= macd_persist:
+                    macd_signal_active = False
+            if current_price < bb_lower_band.iloc[i]:
+                signals_met += 1
+            if rsi.iloc[i] < rsi_th_buy:
+                signals_met += 1
             if obv.iloc[i] > obv.iloc[i-1]:
                 signals_met += 1
                 obv_signal_active = True
@@ -108,7 +118,7 @@ class SignalOptimizer:
                     obv_signal_active = False
 
             # Logic for opening position
-            if signals_met >= 3 and not position_open:
+            if signals_met >= 4 and not position_open:
                 buy_points.append(self.data.index[i])
                 position_open = True
                 entry_price = current_price
@@ -116,7 +126,11 @@ class SignalOptimizer:
             # Logic for closing position
             if position_open:
                 # Stop loss or Take profit
-                if current_price <= entry_price * (1 - stp_ls_pct / 100) or current_price > upper_band.iloc[i]:
+                if (current_price <= entry_price * (1 - stp_ls_pct / 100)) or (macd.iloc[i] < macd_signal.iloc[i] and
+                rsi.iloc[i] > rsi_th_sell and
+                current_price > bb_upper_band.iloc[i]):
+                                
+                # if current_price <= entry_price * (1 - stp_ls_pct / 100) or current_price > bb_upper_band.iloc[i]:
                     sell_points.append(self.data.index[i])
                     trade_return = (current_price - entry_price) / entry_price
                     trade_results.append(trade_return)
@@ -250,15 +264,15 @@ class SignalOptimizer:
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Run Signal Optimizer")
-    # Stochastic Oscillator Parameters
-    parser.add_argument("--stoch_k_period_min", type=int, default=5, help="Minimum Stochastic %K period")
-    parser.add_argument("--stoch_k_period_max", type=int, default=14, help="Maximum Stochastic %K period")
-    parser.add_argument("--stoch_d_period_min", type=int, default=3, help="Minimum Stochastic %D period")
-    parser.add_argument("--stoch_d_period_max", type=int, default=5, help="Maximum Stochastic %D period")
-    parser.add_argument("--stoch_slowing_min", type=int, default=3, help="Minimum Stochastic slowing period")
-    parser.add_argument("--stoch_slowing_max", type=int, default=5, help="Maximum Stochastic slowing period")
-    parser.add_argument("--stoch_threshold_min", type=int, default=10, help="Minimum Stoch threshold for oversold condition")
-    parser.add_argument("--stoch_threshold_max", type=int, default=30, help="Maximum Stoch threshold for oversold condition")
+    # MACD Parameters
+    parser.add_argument("--macd_fast_min", type=int, default=5, help="Minimum MACD fast period")
+    parser.add_argument("--macd_fast_max", type=int, default=15, help="Maximum MACD fast period")
+    parser.add_argument("--macd_slow_min", type=int, default=12, help="Minimum MACD slow period")
+    parser.add_argument("--macd_slow_max", type=int, default=26, help="Maximum MACD slow period")
+    parser.add_argument("--macd_signal_min", type=int, default=9, help="Minimum MACD signal period")
+    parser.add_argument("--macd_signal_max", type=int, default=18, help="Maximum MACD signal period")
+    parser.add_argument("--macd_persist_min", type=int, default=1, help="Minimum MACD periods to stick")
+    parser.add_argument("--macd_persist_max", type=int, default=4, help="Maximum MACD periods to stick")
     # BB Parameters
     parser.add_argument("--bb_period_min", type=int, default=5, help="Minimum Bollinger Bands period")
     parser.add_argument("--bb_period_max", type=int, default=20, help="Maximum Bollinger Bands period")
@@ -266,12 +280,18 @@ def parse_args():
     parser.add_argument("--bb_dev_low_max", type=float, default=2.5, help="Maximum Bollinger Bands deviation")
     parser.add_argument("--bb_dev_up_min", type=float, default=1.5, help="Minimum Bollinger Bands deviation")
     parser.add_argument("--bb_dev_up_max", type=float, default=2.5, help="Maximum Bollinger Bands deviation")
-    parser.add_argument("--cci_p_min", type=int, default=10, help="Minimum cci period")
-    parser.add_argument("--cci_p_max", type=int, default=30, help="Maximum cci period")
+    # OBV Parameters
     parser.add_argument("--obv_p_min", type=int, default=1, help="Minimum obv period")
     parser.add_argument("--obv_p_max", type=int, default=10, help="Maximum obv period")
     parser.add_argument("--obv_persist_min", type=int, default=1, help="Minimum OBV persistence")
     parser.add_argument("--obv_persist_max", type=int, default=4, help="Maximum OBV persistence")
+    # RSI Parameters
+    parser.add_argument("--rsi_period_min", type=int, default=10, help="Minimum RSI period")
+    parser.add_argument("--rsi_period_max", type=int, default=30, help="Maximum RSI period")
+    parser.add_argument("--rsi_threshold_buy_min", type=int, default=20, help="Minimum RSI threshold for oversold condition")
+    parser.add_argument("--rsi_threshold_buy_max", type=int, default=30, help="Maximum RSI threshold for oversold condition")
+    parser.add_argument("--rsi_threshold_sell_min", type=int, default=20, help="Minimum RSI threshold for oversold condition")
+    parser.add_argument("--rsi_threshold_sell_max", type=int, default=30, help="Maximum RSI threshold for oversold condition")
     # Sell Parameters
     parser.add_argument("--stop_loss_pct_min", type=float, default=1, help="Minimum stop loss percentage")
     parser.add_argument("--stop_loss_pct_max", type=float, default=2, help="Maximum stop loss percentage")
@@ -308,14 +328,16 @@ def run_optimization(filename, pbounds, number_of_cores, start_date, end_date, i
 if __name__ == "__main__":
     args = parse_args()
     PBOUNDS = {
-        # 'stoch_k_p': (args.stoch_k_period_min, args.stoch_k_period_max),
-        # 'stoch_slow_k_p': (args.stoch_slowing_min, args.stoch_slowing_max),
-        # 'stoch_slow_d_p': (args.stoch_d_period_min, args.stoch_d_period_max),
-        # 'stoch_thr': (args.stoch_threshold_min, args.stoch_threshold_max),
+        'macd_fast_p': (args.macd_fast_min, args.macd_fast_max),
+        'macd_slow_p': (args.macd_slow_min, args.macd_slow_max),
+        'macd_sig_p': (args.macd_signal_min, args.macd_signal_max),
+        'macd_persist': (args.macd_persist_min, args.macd_persist_max),
+        'rsi_p': (args.rsi_period_min, args.rsi_period_max),
+        'rsi_th_buy': (args.rsi_threshold_buy_min, args.rsi_threshold_buy_max),
+        'rsi_th_sell': (args.rsi_threshold_sell_min, args.rsi_threshold_sell_max),
         'bb_p': (args.bb_period_min, args.bb_period_max),
         'bb_dev_low': (args.bb_dev_low_min, args.bb_dev_low_max),
         'bb_dev_up': (args.bb_dev_up_min, args.bb_dev_up_max),
-        'cci_p': (args.cci_p_min, args.cci_p_max),
         'obv_p': (args.obv_p_min, args.obv_p_max),
         'obv_persist': (args.obv_persist_min, args.obv_persist_max),
         'stp_ls_pct': (args.stop_loss_pct_min, args.stop_loss_pct_max),
