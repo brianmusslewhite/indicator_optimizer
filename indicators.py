@@ -26,6 +26,13 @@ def calculate_ema(data, fast_period, slow_period):
     slow_ema = data['close'].ewm(span=slow_period, adjust=False).mean()
     return fast_ema, slow_ema
 
+def calculate_macd(data, fast_period, slow_period, signal_period):
+    exp1 = data['close'].ewm(span=fast_period, adjust=False).mean()
+    exp2 = data['close'].ewm(span=slow_period, adjust=False).mean()
+    macd = exp1 - exp2
+    signal_line = macd.ewm(span=signal_period, adjust=False).mean()
+    return macd, signal_line
+
 def calculate_obv(data, ema_period):
     obv = np.where(data['close'] > data['close'].shift(), data['volume'], -data['volume']).cumsum()
     obv_ema = pd.Series(obv, index=data.index).ewm(span=ema_period, adjust=False).mean()

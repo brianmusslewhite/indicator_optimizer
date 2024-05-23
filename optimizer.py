@@ -12,7 +12,7 @@ from tqdm import tqdm
 from pyDOE import lhs
 
 from load_data import DataLoader
-from indicators import calculate_bollinger_bands, calculate_cci, calculate_obv
+from indicators import calculate_macd, calculate_rsi, calculate_bollinger_bands, calculate_cci, calculate_obv
 from plot_data import visualize_top_results, plot_trades, plot_parameter_sensitivity
 
 MINUTES_IN_DAY = 1440
@@ -68,10 +68,11 @@ class SignalOptimizer:
         self.param_to_results = {}
         self.total_percent_gain = 0
 
-    def evaluate_performance(self, bb_p, bb_dev_low, bb_dev_up, cci_p, obv_p, obv_persist, stp_ls_pct, idl_trd_frq_hrs):
+    def evaluate_performance(self, bb_p, bb_dev_low, bb_dev_up, macd_fast_p, macd_slow_p, macd_sig_p, obv_p, obv_persist, rsi_p, stp_ls_pct, idl_trd_frq_hrs):
         upper_band, lower_band = calculate_bollinger_bands(self.data, int(bb_p), bb_dev_low, bb_dev_up)
-        cci = calculate_cci(self.data, int(cci_p))
+        macd, signal_line = calculate_macd(macd_fast_p, macd_slow_p, int(macd_sig_p))
         obv = calculate_obv(self.data, int(obv_p))
+        rsi = calculate_rsi(self.data, rsi_p)
         min_trades = int(np.ceil(self.data_duration_hours / idl_trd_frq_hrs))
 
         initial_balance = 1.0
@@ -91,10 +92,11 @@ class SignalOptimizer:
             current_price = self.data['close'].iloc[i]
             signals_met = 0
 
+            if macd.iloc[i] > signal_line.iloc[i] and macd.iloc[i-1] <= signal_line.iloc[i-1]:
+                signals_met += 1
             if current_price < lower_band.iloc[i]:
                 signals_met += 1
-            if (0 >= cci.iloc[i] >= -100):
-                signals_met += 1
+            
             if obv.iloc[i] > obv.iloc[i-1]:
                 signals_met += 1
                 obv_signal_active = True
