@@ -157,14 +157,14 @@ class SignalOptimizer:
         # Penalty for trade frequency
         if total_trades < min_trades:
             trade_deficit_normal = (min_trades - total_trades) / min_trades
-            trade_penalty = math.exp(6*trade_deficit_normal)
+            trade_penalty = 6*trade_deficit_normal
             # print(f"Trade Penalty: {trade_penalty}")
             performance -= trade_penalty
 
         # Penalty for profit ratio
         if profit_ratio < min_prifit_ratio:
             pr_deficit_normal = (min_prifit_ratio - profit_ratio) / min_prifit_ratio
-            pr_penalty = math.exp(10*pr_deficit_normal)
+            pr_penalty = 10*pr_deficit_normal
             # print(f"Profit Ratio Penalty: {pr_penalty}")
             performance -= pr_penalty
 
@@ -329,6 +329,7 @@ def run_optimization(filename, pbounds, number_of_cores, start_date, end_date, i
         best_params = sorted_results[0]['params']
         final_performance, final_buy_points, final_sell_points, total_percent_gain, profit_ratio = optimizer.evaluate_performance(**best_params)
 
+        print(f"{optimizer.dataset_name}")
         print(f"Optimized Indicator Parameters: {best_params}")
         print(f"Best Performance: {final_performance}")
         print(f"Profit Ratio: {profit_ratio}")

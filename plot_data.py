@@ -14,7 +14,7 @@ def plot_pair_plot(results, dataset_name, start_date, end_date, time_now, plot_s
         return
     
     columns_to_plot = [col for col in filtered_results.columns if col not in ['buy_points', 'sell_points']]
-    head_filtered_results = filtered_results.sort_values('total_percent_gain', ascending=False).head(200)
+    head_filtered_results = filtered_results.sort_values('performance', ascending=False).head(200)
     plot_data = head_filtered_results[columns_to_plot]
 
     pairplot = sns.pairplot(plot_data, diag_kind='kde', plot_kws={'alpha': 0.6, 's': 80, 'edgecolor': 'k'}, height=2)
@@ -47,18 +47,23 @@ def plot_parameter_sensitivity(results, dataset_name, start_date, end_date, time
         print("No results for sensitivity analysis.")
         return
 
-    positive_results = results[results['total_percent_gain'] > 0]
-    if positive_results.empty:
-        print("No positive results for sensitivity analysis.")
+    positive_gain_results = results[results['total_percent_gain'] > 0]
+    if positive_gain_results.empty:
+        print("No positive gain results for sensitivity analysis.")
+        return
+    
+    positive_gain_and_performance_results = results[results['performance'] > 0]
+    if positive_gain_and_performance_results.empty:
+        print("No positive gain and performance results for sensitivity analysis.")
         return
 
-    param_cols = [col for col in positive_results.columns if col not in ['performance', 'total_percent_gain', 'profit_ratio', 'buy_points', 'sell_points']]
+    param_cols = [col for col in positive_gain_and_performance_results.columns if col not in ['performance', 'total_percent_gain', 'profit_ratio', 'buy_points', 'sell_points']]
     num_params = len(param_cols)
     fig, axs = plt.subplots(nrows=num_params, figsize=(10, 5 * num_params))
 
     for i, param in enumerate(param_cols):
-        sns.scatterplot(x=param, y='total_percent_gain', data=positive_results, ax=axs[i], color='blue', edgecolor='black')
-        axs[i].set_ylabel('Total Percent Gain')
+        sns.scatterplot(x=param, y='performance', data=positive_gain_and_performance_results, ax=axs[i], color='blue', edgecolor='black')
+        axs[i].set_ylabel('Performance')
         axs[i].text(0.01, 0.95, f'{param}', transform=axs[i].transAxes, verticalalignment='top', fontsize=18, color='black')
         axs[i].set_xlabel(' ')
     
