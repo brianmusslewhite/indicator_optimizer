@@ -13,7 +13,7 @@ from tqdm import tqdm
 from pyDOE import lhs
 
 from load_data import DataLoader
-from indicators import calculate_macd, calculate_rsi, calculate_bollinger_bands, calculate_cci, calculate_obv
+from indicators import calculate_macd, calculate_rsi, calculate_bollinger_bands, calculate_obv
 from plot_data import plot_pair_plot, plot_trades_on_data, plot_parameter_sensitivity
 
 MINUTES_IN_DAY = 1440

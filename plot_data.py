@@ -4,7 +4,6 @@ import pandas as pd
 import os
 
 def plot_pair_plot(results, dataset_name, start_date, end_date, time_now, plot_subfolder):
-    print("Data before plotting:", results)
     if results.empty:
         print("No results to visualize.")
         return
