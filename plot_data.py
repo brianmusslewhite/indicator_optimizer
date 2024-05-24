@@ -3,27 +3,31 @@ import seaborn as sns
 import pandas as pd
 import os
 
-def visualize_top_results(top_results, dataset_name, start_date, end_date, time_now, plot_subfolder):
-    if not top_results:
+def plot_pair_plot(results, dataset_name, start_date, end_date, time_now, plot_subfolder):
+    print("Data before plotting:", results)
+    if results.empty:
         print("No results to visualize.")
         return
 
-    results_df = pd.DataFrame([res['params'] for res in top_results])
-    results_df['profit'] = [res['target'] for res in top_results]
-    filtered_results_df = results_df[results_df['profit'] != 0]
-
-    if filtered_results_df.empty:
+    filtered_results = results[results['profit_ratio'] != 0]
+    if filtered_results.empty:
         print("No results to visualize after filtering out zero profits.")
         return
+    
+    # Exclude 'performance', 'buy_points', 'sell_points' from the plot
+    columns_to_plot = [col for col in filtered_results.columns if col not in ['performance', 'buy_points', 'sell_points']]
+    head_filtered_results = filtered_results.sort_values('total_percent_gain', ascending=False).head(200)
+    plot_data = head_filtered_results[columns_to_plot]
 
-    pairplot = sns.pairplot(filtered_results_df, diag_kind='kde', plot_kws={'alpha': 0.6, 's': 80, 'edgecolor': 'k'}, height=2)
+    pairplot = sns.pairplot(plot_data, diag_kind='kde', plot_kws={'alpha': 0.6, 's': 80, 'edgecolor': 'k'}, height=2)
     pairplot.figure.suptitle(f'{dataset_name}', size=12)
 
     filename = f"{dataset_name}_PairPlot_{start_date}_to_{end_date}_Date_{time_now}.png"
     plt.savefig(os.path.join(plot_subfolder, filename))
-    # plt.show()
+    plt.show()
+    plt.close()
 
-def plot_trades(data, buy_points, sell_points, dataset_name, start_date, end_date, time_now, plot_subfolder):
+def plot_trades_on_data(data, buy_points, sell_points, dataset_name, start_date, end_date, time_now, plot_subfolder):
     plt.figure(figsize=(14, 7))
     plt.plot(data['time'], data['close'], label='Close Price', alpha=0.3, color='#7f7f7f')
 
@@ -38,34 +42,32 @@ def plot_trades(data, buy_points, sell_points, dataset_name, start_date, end_dat
     filename = f"{dataset_name}_BUYSELLResults_{start_date}_to_{end_date}_Date_{time_now}.png"
     plt.savefig(os.path.join(plot_subfolder, filename))
     plt.show()
+    plt.close()
 
 def plot_parameter_sensitivity(results, dataset_name, start_date, end_date, time_now, plot_subfolder):
-    if not results:
+    if results.empty:
         print("No results for sensitivity analysis.")
         return
 
-    # Create a DataFrame from results
-    results_df = pd.DataFrame([res['params'] for res in results])
-    results_df['profit'] = [res['target'] for res in results]
-
-    positive_results_df = results_df[results_df['profit'] > 0]
-    if positive_results_df.empty:
+    positive_results = results[results['total_percent_gain'] > 0]
+    if positive_results.empty:
         print("No positive results for sensitivity analysis.")
         return
 
-    # Plotting
-    num_params = len(results_df.columns) - 1  # exclude the profit column
+    param_cols = [col for col in positive_results.columns if col not in ['performance', 'total_percent_gain', 'profit_ratio', 'buy_points', 'sell_points']]
+    num_params = len(param_cols)
     fig, axs = plt.subplots(nrows=num_params, figsize=(10, 5 * num_params))
 
-    for i, param in enumerate(positive_results_df.columns[:-1]):  # exclude the profit column
-        sns.scatterplot(x=param, y='profit', data=positive_results_df, ax=axs[i], color='blue', edgecolor='black')
-        axs[i].set_ylabel('Profit')
+    for i, param in enumerate(param_cols):
+        sns.scatterplot(x=param, y='total_percent_gain', data=positive_results, ax=axs[i], color='blue', edgecolor='black')
+        axs[i].set_ylabel('Total Percent Gain')
         axs[i].text(0.01, 0.95, f'{param}', transform=axs[i].transAxes, verticalalignment='top', fontsize=18, color='black')
-        axs[i].set_xlabel('')
+        axs[i].set_xlabel(' ')
     
-    plt.tight_layout(rect=[0, 0, 1, 0.96])
+    plt.tight_layout(rect=[0, 0, 1, 0.97])
     fig.suptitle(f'{dataset_name}_{start_date}_to_{end_date}')
 
     filename = f"{dataset_name}_Sensitivity_{start_date}_to_{end_date}_Date_{time_now}.png"
     plt.savefig(os.path.join(plot_subfolder, filename))
     plt.show()
+    plt.close()

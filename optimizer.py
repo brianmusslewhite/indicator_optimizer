@@ -1,6 +1,7 @@
 import argparse
 import math
 import numpy as np
+import pandas as pd
 import re
 import signal
 import os
@@ -13,13 +14,15 @@ from pyDOE import lhs
 
 from load_data import DataLoader
 from indicators import calculate_macd, calculate_rsi, calculate_bollinger_bands, calculate_cci, calculate_obv
-from plot_data import visualize_top_results, plot_trades, plot_parameter_sensitivity
+from plot_data import plot_pair_plot, plot_trades_on_data, plot_parameter_sensitivity
 
 MINUTES_IN_DAY = 1440
 MAX_HOLD_TIME_MINUTES = MINUTES_IN_DAY * 2
 INTERRUPTED = False
 MIN_DESIRED_TRADE_FREQUENCY_DAYS = 1
 
+import warnings
+warnings.filterwarnings("ignore", category=FutureWarning, message="The behavior of DataFrame concatenation with empty or all-NA entries")
 
 def signal_handler(signum, frame):
     global INTERRUPTED
@@ -66,7 +69,24 @@ class SignalOptimizer:
         self.best_sell_points = []
         self.best_performance = float('-inf')
         self.param_to_results = {}
-        self.total_percent_gain = 0
+        self.results_df = pd.DataFrame(columns=['performance', 'buy_points', 'sell_points', 'total_percent_gain', 'profit_ratio'])
+
+    def store_results(self, performance, buy_points, sell_points, total_percent_gain, profit_ratio, params):
+        # print("Storing results with:", performance, buy_points, sell_points, total_percent_gain, profit_ratio, params)
+        params_df = pd.DataFrame([params])
+        performance_data = {
+            'performance': [performance],
+            'buy_points': [buy_points],
+            'sell_points': [sell_points],
+            'total_percent_gain': [total_percent_gain],
+            'profit_ratio': [profit_ratio],
+        }
+        performance_df = pd.DataFrame(performance_data)
+
+        new_row = pd.concat([params_df, performance_df], axis=1)
+        # print("New row to add:", new_row)
+        self.results_df = pd.concat([self.results_df, new_row], ignore_index=True)
+        # print("Updated DataFrame:", self.results_df.head()) 
 
     def evaluate_performance(self, bb_p, bb_dev_low, bb_dev_up, macd_fast_p, macd_slow_p, macd_sig_p, macd_persist, obv_p, obv_persist, rsi_p, rsi_th_buy, rsi_th_sell, stp_ls_pct, idl_trd_frq_hrs):
         bb_upper_band, bb_lower_band = calculate_bollinger_bands(self.data, int(bb_p), bb_dev_low, bb_dev_up)
@@ -146,23 +166,23 @@ class SignalOptimizer:
         # Penalty for trade frequency
         if total_trades < min_trades:
             trade_deficit_normal = (min_trades - total_trades) / min_trades
-            trade_penalty = 2*math.exp(trade_deficit_normal)
+            trade_penalty = math.exp(6*trade_deficit_normal)
             # print(f"Trade Penalty: {trade_penalty}")
             performance -= trade_penalty
 
         # Penalty for profit ratio
         if profit_ratio < min_prifit_ratio:
             pr_deficit_normal = (min_prifit_ratio - profit_ratio) / min_prifit_ratio
-            pr_penalty = 2*math.exp(pr_deficit_normal)
+            pr_penalty = math.exp(10*pr_deficit_normal)
             # print(f"Profit Ratio Penalty: {pr_penalty}")
             performance -= pr_penalty
 
         return performance, buy_points, sell_points, total_percent_gain, profit_ratio
 
     def evaluate_wrapper(self, params):
-        performance, _, _, total_percent_gain, profit_ratio = self.evaluate_performance(**params)
+        performance, buy_points, sell_points, total_percent_gain, profit_ratio = self.evaluate_performance(**params)
         print(f"Performance: {performance:8.2f}, Profit Ratio: {profit_ratio:8.2f}, Total Percent Gain: {total_percent_gain:8.2f}")
-        return performance
+        return performance, buy_points, sell_points, total_percent_gain, profit_ratio, params
 
     def generate_lhs_samples(self, pbounds, num_samples):
         num_params = len(pbounds)
@@ -209,9 +229,10 @@ class SignalOptimizer:
                         delayed(self.evaluate_wrapper)(params) for params in batch_points
                     )
 
-                    for idx, performance in enumerate(batch_results):
-                        if performance != -1E9:
-                            optimizer.register(params=batch_points[idx], target=performance)
+                    # Register results in the optimizer and process data
+                    for performance, buy_points, sell_points, total_percent_gain, profit_ratio, params in batch_results:
+                        optimizer.register(params=params, target=performance)
+                        self.store_results(performance, buy_points, sell_points, total_percent_gain, profit_ratio, params)
 
                     # Update tqdm with the number of points processed in this batch
                     pbar.update(len(batch_points))
@@ -243,8 +264,9 @@ class SignalOptimizer:
                     next_params = optimizer.suggest(utility)
                     performance, buy_points, sell_points, total_percent_gain, profit_ratio = self.evaluate_performance(**next_params)
                     optimizer.register(params=next_params, target=performance)
+                    self.store_results(performance, buy_points, sell_points, total_percent_gain, profit_ratio, next_params)
+                    
                     pbar_counter += 1
-
                     if pbar_counter % 100 == 0:
                         pbar.update(100)
                         print()
@@ -321,9 +343,9 @@ def run_optimization(filename, pbounds, number_of_cores, start_date, end_date, i
         print(f"Profit Ratio: {profit_ratio}")
         print(f"Percent Gain: {total_percent_gain}")
 
-        visualize_top_results(sorted_results, optimizer.dataset_name, optimizer.start_date, optimizer.end_date, optimizer.time_now, optimizer.plot_subfolder)
-        plot_trades(optimizer.data, final_buy_points, final_sell_points, optimizer.dataset_name, optimizer.start_date, optimizer.end_date, optimizer.time_now, optimizer.plot_subfolder)
-        plot_parameter_sensitivity(sorted_results, optimizer.dataset_name, start_date, end_date, optimizer.time_now, optimizer.plot_subfolder)
+        plot_pair_plot(optimizer.results_df, optimizer.dataset_name, optimizer.start_date, optimizer.end_date, optimizer.time_now, optimizer.plot_subfolder)
+        plot_trades_on_data(optimizer.data, final_buy_points, final_sell_points, optimizer.dataset_name, optimizer.start_date, optimizer.end_date, optimizer.time_now, optimizer.plot_subfolder)
+        plot_parameter_sensitivity(optimizer.results_df, optimizer.dataset_name, start_date, end_date, optimizer.time_now, optimizer.plot_subfolder)
 
 if __name__ == "__main__":
     args = parse_args()
