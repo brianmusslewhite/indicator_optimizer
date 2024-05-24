@@ -4,16 +4,16 @@ import platform
 
 os_name = platform.system()
 if os_name == "Linux" or os_name == "Darwin":
-    python_version = 'gamemoderun python3'
+    python_version = 'python3'
 elif os_name == "Windows":
     python_version = 'python'
 
 configs = [
     ("ETHXBT_15min_Kraken.csv", {
-        'start_date': '2023-09-1', 'end_date': '2023-12-31',
+        'start_date': '2023-06-1', 'end_date': '2023-12-31',
         'ideal_trade_frequency_hours_min': (12),
         'ideal_trade_frequency_hours_max': (24*7),
-        'init_points': 400, 'iter_points': 1000,
+        'init_points': 10000, 'iter_points': 0,
         'macd_fast_min': 5, 'macd_fast_max': 25,
         'macd_slow_min': 15, 'macd_slow_max': 50,
         'macd_signal_min': 3, 'macd_signal_max': 30,

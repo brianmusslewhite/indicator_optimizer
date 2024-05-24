@@ -42,29 +42,23 @@ class SignalOptimizer:
         self.init_points = init_points
         self.iter_points = iter_points
 
-        # Extract dataset name and data frequency from filepath
+        # Extract dataset name and data frequency from filepath and load data
         self.dataset_name = os.path.basename(self.filepath).split('.')[0]
         match = re.search(r"(\d+)min", self.filepath)
         self.data_frequency_in_minutes = int(match.group(1)) if match else None
-
-        # Data loading
         self.data_loader = DataLoader(filepath, start_date, end_date)
         self.data = self.data_loader.data
 
-        # Directory for output plots
+        # Directory for output plots and timestamp
         self.plot_subfolder = os.path.join('indicator_optimizer_plots', self.dataset_name)
         os.makedirs(self.plot_subfolder, exist_ok=True)
-
-        # Timestamp for this operation
         self.time_now = datetime.now().strftime('%Y%m%d_%H%M%S')
 
-        # Operational parameters
+        # Operational parameters and results storage
         self.min_desired_trade_frequency_days = MIN_DESIRED_TRADE_FREQUENCY_DAYS
         self.data_duration_hours = ((self.data.index.max() - self.data.index.min()) * self.data_frequency_in_minutes) / 60
         self.bad_result_number = -500
         self.max_penalty = 150
-
-        # Results storage
         self.best_buy_points = []
         self.best_sell_points = []
         self.best_performance = float('-inf')
@@ -72,7 +66,6 @@ class SignalOptimizer:
         self.results_df = pd.DataFrame(columns=['performance', 'buy_points', 'sell_points', 'total_percent_gain', 'profit_ratio'])
 
     def store_results(self, performance, buy_points, sell_points, total_percent_gain, profit_ratio, params):
-        # print("Storing results with:", performance, buy_points, sell_points, total_percent_gain, profit_ratio, params)
         params_df = pd.DataFrame([params])
         performance_data = {
             'performance': [performance],
@@ -84,9 +77,7 @@ class SignalOptimizer:
         performance_df = pd.DataFrame(performance_data)
 
         new_row = pd.concat([params_df, performance_df], axis=1)
-        # print("New row to add:", new_row)
         self.results_df = pd.concat([self.results_df, new_row], ignore_index=True)
-        # print("Updated DataFrame:", self.results_df.head()) 
 
     def evaluate_performance(self, bb_p, bb_dev_low, bb_dev_up, macd_fast_p, macd_slow_p, macd_sig_p, macd_persist, obv_p, obv_persist, rsi_p, rsi_th_buy, rsi_th_sell, stp_ls_pct, idl_trd_frq_hrs):
         bb_upper_band, bb_lower_band = calculate_bollinger_bands(self.data, int(bb_p), bb_dev_low, bb_dev_up)

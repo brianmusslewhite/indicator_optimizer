@@ -13,8 +13,7 @@ def plot_pair_plot(results, dataset_name, start_date, end_date, time_now, plot_s
         print("No results to visualize after filtering out zero profits.")
         return
     
-    # Exclude 'performance', 'buy_points', 'sell_points' from the plot
-    columns_to_plot = [col for col in filtered_results.columns if col not in ['performance', 'buy_points', 'sell_points']]
+    columns_to_plot = [col for col in filtered_results.columns if col not in ['buy_points', 'sell_points']]
     head_filtered_results = filtered_results.sort_values('total_percent_gain', ascending=False).head(200)
     plot_data = head_filtered_results[columns_to_plot]
 
