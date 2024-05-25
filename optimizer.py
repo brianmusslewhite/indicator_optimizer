@@ -11,9 +11,6 @@ from math import ceil
 from tqdm import tqdm
 from pyDOE import lhs
 
-import cProfile
-import pstats
-
 from load_data import DataLoader
 from indicators import calculate_macd, calculate_rsi, calculate_bollinger_bands, calculate_obv
 from plot_data import plot_pair_plot, plot_trades_on_data, plot_parameter_sensitivity
@@ -333,9 +330,9 @@ def run_optimization(filename, pbounds, number_of_cores, start_date, end_date, i
         print(f"Profit Ratio: {profit_ratio}")
         print(f"Percent Gain: {total_percent_gain}")
 
-        # plot_pair_plot(optimizer.results_df, optimizer.dataset_name, optimizer.start_date, optimizer.end_date, optimizer.time_now, optimizer.plot_subfolder)
-        # plot_trades_on_data(optimizer.data, final_buy_points, final_sell_points, optimizer.dataset_name, optimizer.start_date, optimizer.end_date, optimizer.time_now, optimizer.plot_subfolder)
-        # plot_parameter_sensitivity(optimizer.results_df, optimizer.dataset_name, start_date, end_date, optimizer.time_now, optimizer.plot_subfolder)
+        plot_pair_plot(optimizer.results_df, optimizer.dataset_name, optimizer.start_date, optimizer.end_date, optimizer.time_now, optimizer.plot_subfolder)
+        plot_trades_on_data(optimizer.data, final_buy_points, final_sell_points, optimizer.dataset_name, optimizer.start_date, optimizer.end_date, optimizer.time_now, optimizer.plot_subfolder)
+        plot_parameter_sensitivity(optimizer.results_df, optimizer.dataset_name, start_date, end_date, optimizer.time_now, optimizer.plot_subfolder)
 
 if __name__ == "__main__":
     args = parse_args()
@@ -356,15 +353,4 @@ if __name__ == "__main__":
         'idl_trd_fr_hr': (args.ideal_trade_frequency_hours_min, args.ideal_trade_frequency_hours_max)
     }
 
-    profiler = cProfile.Profile()
-    profiler.enable()
     run_optimization(args.filename, PBOUNDS, args.number_of_cores, args.start_date, args.end_date, args.init_points, args.iter_points)
-    profiler.disable()
-
-    # Save profiling results
-    profiler.dump_stats('profile_output.prof')
-
-    # Print profiling results
-    stats = pstats.Stats(profiler)
-    stats.sort_stats(pstats.SortKey.TIME)
-    stats.print_stats()
