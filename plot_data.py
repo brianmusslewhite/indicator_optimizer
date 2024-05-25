@@ -52,17 +52,22 @@ def plot_parameter_sensitivity(results, dataset_name, start_date, end_date, time
         print("No positive gain results for sensitivity analysis.")
         return
     
-    positive_gain_and_performance_results = results[results['performance'] > 0]
+    positive_gain_and_performance_results = positive_gain_results[positive_gain_results['performance'] > 0]
     if positive_gain_and_performance_results.empty:
         print("No positive gain and performance results for sensitivity analysis.")
         return
+    
+    positive_gain_and_performance_and_pr_results = positive_gain_and_performance_results[positive_gain_and_performance_results['profit_ratio'] > 0.5]
+    if positive_gain_and_performance_and_pr_results.empty:
+        print("No positive gain and performance results for sensitivity analysis.")
+        return
 
-    param_cols = [col for col in positive_gain_and_performance_results.columns if col not in ['performance', 'total_percent_gain', 'profit_ratio', 'buy_points', 'sell_points']]
+    param_cols = [col for col in positive_gain_and_performance_and_pr_results.columns if col not in ['performance', 'total_percent_gain', 'profit_ratio', 'buy_points', 'sell_points']]
     num_params = len(param_cols)
     fig, axs = plt.subplots(nrows=num_params, figsize=(10, 5 * num_params))
 
     for i, param in enumerate(param_cols):
-        sns.scatterplot(x=param, y='performance', data=positive_gain_and_performance_results, ax=axs[i], color='blue', edgecolor='black')
+        sns.scatterplot(x=param, y='performance', data=positive_gain_and_performance_and_pr_results, ax=axs[i], color='blue', edgecolor='black')
         axs[i].set_ylabel('Performance')
         axs[i].text(0.01, 0.95, f'{param}', transform=axs[i].transAxes, verticalalignment='top', fontsize=18, color='black')
         axs[i].set_xlabel(' ')

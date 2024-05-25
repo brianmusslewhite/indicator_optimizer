@@ -56,8 +56,6 @@ def calculate_obv(data, ema_period):
         obv = np.where(data['close'] > data['close'].shift(), data['volume'], -data['volume']).cumsum()
         obv_ema = pd.Series(obv, index=data.index).ewm(span=ema_period, adjust=False).mean()
         cache[key] = obv_ema
-    else:
-        print("used key!")
     return cache[key]
 
 def calculate_rsi(data, rsi_period):

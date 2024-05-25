@@ -1,5 +1,4 @@
 import argparse
-import math
 import numpy as np
 import pandas as pd
 import re
@@ -11,6 +10,9 @@ from joblib import Parallel, delayed
 from math import ceil
 from tqdm import tqdm
 from pyDOE import lhs
+
+import cProfile
+import pstats
 
 from load_data import DataLoader
 from indicators import calculate_macd, calculate_rsi, calculate_bollinger_bands, calculate_obv
@@ -77,12 +79,12 @@ class SignalOptimizer:
         new_row = pd.concat([params_df, performance_df], axis=1)
         self.results_df = pd.concat([self.results_df, new_row], ignore_index=True)
 
-    def evaluate_performance(self, bb_p, bb_dev_low, bb_dev_up, macd_fast_p, macd_slow_p, macd_sig_p, macd_persist, obv_p, obv_persist, rsi_p, rsi_th_buy, rsi_th_sell, stp_ls_pct, idl_trd_frq_hrs):
-        bb_upper_band, bb_lower_band = calculate_bollinger_bands(self.data, int(bb_p), round(bb_dev_low, 2), round(bb_dev_up, 2))
-        macd, macd_signal = calculate_macd(self.data, round(macd_fast_p, 2), round(macd_slow_p, 2), int(macd_sig_p))
+    def evaluate_performance(self, bb_p, bb_dv_lw, bb_dv_up, macd_fst_p, macd_slw_p, macd_sig_p, macd_prst, obv_p, obv_prst, rsi_p, rsi_th_by, rsi_th_sl, stp_ls_pct, idl_trd_fr_hr):
+        bb_upper_band, bb_lower_band = calculate_bollinger_bands(self.data, int(bb_p), round(bb_dv_lw, 2), round(bb_dv_up, 2))
+        macd, macd_signal = calculate_macd(self.data, round(macd_fst_p, 2), round(macd_slw_p, 2), int(macd_sig_p))
         obv = calculate_obv(self.data, int(obv_p))
         rsi = calculate_rsi(self.data, int(rsi_p))
-        min_trades = int(np.ceil(self.data_duration_hours / idl_trd_frq_hrs))
+        min_trades = int(np.ceil(self.data_duration_hours / idl_trd_fr_hr))
 
         initial_balance = 1.0
         current_balance = initial_balance
@@ -110,11 +112,11 @@ class SignalOptimizer:
             elif macd_signal_active:
                 signals_met += 1
                 macd_signal_counter += 1
-                if macd_signal_counter >= macd_persist:
+                if macd_signal_counter >= macd_prst:
                     macd_signal_active = False
             if current_price < bb_lower_band.iloc[i]:
                 signals_met += 1
-            if rsi.iloc[i] < rsi_th_buy:
+            if rsi.iloc[i] < rsi_th_by:
                 signals_met += 1
             if obv.iloc[i] > obv.iloc[i-1]:
                 signals_met += 1
@@ -123,7 +125,7 @@ class SignalOptimizer:
             elif obv_signal_active:
                 obv_signal_counter += 1
                 signals_met += 1
-                if obv_signal_counter >= obv_persist:
+                if obv_signal_counter >= obv_prst:
                     obv_signal_active = False
 
             # Logic for opening position
@@ -136,7 +138,7 @@ class SignalOptimizer:
             if position_open:
                 # Stop loss or Take profit
                 if (current_price <= entry_price * (1 - stp_ls_pct / 100)) or (macd.iloc[i] < macd_signal.iloc[i] and
-                rsi.iloc[i] > rsi_th_sell and
+                rsi.iloc[i] > rsi_th_sl and
                 current_price > bb_upper_band.iloc[i]):
                     sell_points.append(self.data.index[i])
                     trade_return = (current_price - entry_price) / entry_price
@@ -212,7 +214,7 @@ class SignalOptimizer:
                     batch_points = init_points[start_idx:end_idx]
 
                     # Process each batch in parallel
-                    batch_results = Parallel(n_jobs=self.number_of_cores, backend="multiprocessing")(
+                    batch_results = Parallel(n_jobs=self.number_of_cores, backend="loky")(
                         delayed(self.evaluate_wrapper)(params) for params in batch_points
                     )
 
@@ -331,27 +333,38 @@ def run_optimization(filename, pbounds, number_of_cores, start_date, end_date, i
         print(f"Profit Ratio: {profit_ratio}")
         print(f"Percent Gain: {total_percent_gain}")
 
-        plot_pair_plot(optimizer.results_df, optimizer.dataset_name, optimizer.start_date, optimizer.end_date, optimizer.time_now, optimizer.plot_subfolder)
-        plot_trades_on_data(optimizer.data, final_buy_points, final_sell_points, optimizer.dataset_name, optimizer.start_date, optimizer.end_date, optimizer.time_now, optimizer.plot_subfolder)
-        plot_parameter_sensitivity(optimizer.results_df, optimizer.dataset_name, start_date, end_date, optimizer.time_now, optimizer.plot_subfolder)
+        # plot_pair_plot(optimizer.results_df, optimizer.dataset_name, optimizer.start_date, optimizer.end_date, optimizer.time_now, optimizer.plot_subfolder)
+        # plot_trades_on_data(optimizer.data, final_buy_points, final_sell_points, optimizer.dataset_name, optimizer.start_date, optimizer.end_date, optimizer.time_now, optimizer.plot_subfolder)
+        # plot_parameter_sensitivity(optimizer.results_df, optimizer.dataset_name, start_date, end_date, optimizer.time_now, optimizer.plot_subfolder)
 
 if __name__ == "__main__":
     args = parse_args()
     PBOUNDS = {
-        'macd_fast_p': (args.macd_fast_min, args.macd_fast_max),
-        'macd_slow_p': (args.macd_slow_min, args.macd_slow_max),
+        'macd_fst_p': (args.macd_fast_min, args.macd_fast_max),
+        'macd_slw_p': (args.macd_slow_min, args.macd_slow_max),
         'macd_sig_p': (args.macd_signal_min, args.macd_signal_max),
-        'macd_persist': (args.macd_persist_min, args.macd_persist_max),
+        'macd_prst': (args.macd_persist_min, args.macd_persist_max),
         'rsi_p': (args.rsi_period_min, args.rsi_period_max),
-        'rsi_th_buy': (args.rsi_threshold_buy_min, args.rsi_threshold_buy_max),
-        'rsi_th_sell': (args.rsi_threshold_sell_min, args.rsi_threshold_sell_max),
+        'rsi_th_by': (args.rsi_threshold_buy_min, args.rsi_threshold_buy_max),
+        'rsi_th_sl': (args.rsi_threshold_sell_min, args.rsi_threshold_sell_max),
         'bb_p': (args.bb_period_min, args.bb_period_max),
-        'bb_dev_low': (args.bb_dev_low_min, args.bb_dev_low_max),
-        'bb_dev_up': (args.bb_dev_up_min, args.bb_dev_up_max),
+        'bb_dv_lw': (args.bb_dev_low_min, args.bb_dev_low_max),
+        'bb_dv_up': (args.bb_dev_up_min, args.bb_dev_up_max),
         'obv_p': (args.obv_p_min, args.obv_p_max),
-        'obv_persist': (args.obv_persist_min, args.obv_persist_max),
+        'obv_prst': (args.obv_persist_min, args.obv_persist_max),
         'stp_ls_pct': (args.stop_loss_pct_min, args.stop_loss_pct_max),
-        'idl_trd_frq_hrs': (args.ideal_trade_frequency_hours_min, args.ideal_trade_frequency_hours_max)
+        'idl_trd_fr_hr': (args.ideal_trade_frequency_hours_min, args.ideal_trade_frequency_hours_max)
     }
 
+    profiler = cProfile.Profile()
+    profiler.enable()
     run_optimization(args.filename, PBOUNDS, args.number_of_cores, args.start_date, args.end_date, args.init_points, args.iter_points)
+    profiler.disable()
+
+    # Save profiling results
+    profiler.dump_stats('profile_output.prof')
+
+    # Print profiling results
+    stats = pstats.Stats(profiler)
+    stats.sort_stats(pstats.SortKey.TIME)
+    stats.print_stats()
