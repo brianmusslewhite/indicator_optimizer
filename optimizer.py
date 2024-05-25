@@ -57,8 +57,6 @@ class SignalOptimizer:
         # Operational parameters and results storage
         self.min_desired_trade_frequency_days = MIN_DESIRED_TRADE_FREQUENCY_DAYS
         self.data_duration_hours = ((self.data.index.max() - self.data.index.min()) * self.data_frequency_in_minutes) / 60
-        self.bad_result_number = -500
-        self.max_penalty = 150
         self.best_buy_points = []
         self.best_sell_points = []
         self.best_performance = float('-inf')
@@ -80,8 +78,8 @@ class SignalOptimizer:
         self.results_df = pd.concat([self.results_df, new_row], ignore_index=True)
 
     def evaluate_performance(self, bb_p, bb_dev_low, bb_dev_up, macd_fast_p, macd_slow_p, macd_sig_p, macd_persist, obv_p, obv_persist, rsi_p, rsi_th_buy, rsi_th_sell, stp_ls_pct, idl_trd_frq_hrs):
-        bb_upper_band, bb_lower_band = calculate_bollinger_bands(self.data, int(bb_p), bb_dev_low, bb_dev_up)
-        macd, macd_signal = calculate_macd(self.data, macd_fast_p, macd_slow_p, int(macd_sig_p))
+        bb_upper_band, bb_lower_band = calculate_bollinger_bands(self.data, int(bb_p), round(bb_dev_low, 2), round(bb_dev_up, 2))
+        macd, macd_signal = calculate_macd(self.data, round(macd_fast_p, 2), round(macd_slow_p, 2), int(macd_sig_p))
         obv = calculate_obv(self.data, int(obv_p))
         rsi = calculate_rsi(self.data, int(rsi_p))
         min_trades = int(np.ceil(self.data_duration_hours / idl_trd_frq_hrs))
@@ -94,7 +92,7 @@ class SignalOptimizer:
         buy_points = []
         sell_points = []
         trade_results = []
-        min_prifit_ratio = 0.8
+        min_profit_ratio = 0.8
 
         obv_signal_active = False
         obv_signal_counter = 0
@@ -140,8 +138,6 @@ class SignalOptimizer:
                 if (current_price <= entry_price * (1 - stp_ls_pct / 100)) or (macd.iloc[i] < macd_signal.iloc[i] and
                 rsi.iloc[i] > rsi_th_sell and
                 current_price > bb_upper_band.iloc[i]):
-                                
-                # if current_price <= entry_price * (1 - stp_ls_pct / 100) or current_price > bb_upper_band.iloc[i]:
                     sell_points.append(self.data.index[i])
                     trade_return = (current_price - entry_price) / entry_price
                     trade_results.append(trade_return)
@@ -157,14 +153,14 @@ class SignalOptimizer:
         # Penalty for trade frequency
         if total_trades < min_trades:
             trade_deficit_normal = (min_trades - total_trades) / min_trades
-            trade_penalty = 6*trade_deficit_normal
+            trade_penalty = min(6*trade_deficit_normal, 200)
             # print(f"Trade Penalty: {trade_penalty}")
             performance -= trade_penalty
 
         # Penalty for profit ratio
-        if profit_ratio < min_prifit_ratio:
-            pr_deficit_normal = (min_prifit_ratio - profit_ratio) / min_prifit_ratio
-            pr_penalty = 10*pr_deficit_normal
+        if profit_ratio < min_profit_ratio:
+            pr_deficit_normal = (min_profit_ratio - profit_ratio) / min_profit_ratio
+            pr_penalty = min(10*pr_deficit_normal, 200)
             # print(f"Profit Ratio Penalty: {pr_penalty}")
             performance -= pr_penalty
 
