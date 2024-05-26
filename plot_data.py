@@ -24,7 +24,7 @@ def plot_pair_plot(results, dataset_name, start_date, end_date, time_now, plot_s
 
     filename = f"{dataset_name}_PairPlot_{start_date}_to_{end_date}_Date_{time_now}.png"
     plt.savefig(os.path.join(plot_subfolder, filename))
-    plt.show()
+    plt.show(block=False)
     plt.close()
 
 def plot_trades_on_data(data, buy_points, sell_points, dataset_name, start_date, end_date, time_now, plot_subfolder):
@@ -41,7 +41,7 @@ def plot_trades_on_data(data, buy_points, sell_points, dataset_name, start_date,
 
     filename = f"{dataset_name}_BUYSELLResults_{start_date}_to_{end_date}_Date_{time_now}.png"
     plt.savefig(os.path.join(plot_subfolder, filename))
-    plt.show()
+    plt.show(block=False)
     plt.close()
 
 def plot_parameter_sensitivity(results, dataset_name, start_date, end_date, time_now, plot_subfolder):
@@ -79,5 +79,5 @@ def plot_parameter_sensitivity(results, dataset_name, start_date, end_date, time
 
     filename = f"{dataset_name}_Sensitivity_{start_date}_to_{end_date}_Date_{time_now}.png"
     plt.savefig(os.path.join(plot_subfolder, filename))
-    plt.show()
+    plt.show(block=False)
     plt.close()
