@@ -17,7 +17,7 @@ def plot_pair_plot(results, dataset_name, start_date, end_date, time_now, plot_s
     head_filtered_results = filtered_results.sort_values('performance', ascending=False).head(200)
     plot_data = head_filtered_results[columns_to_plot]
 
-    sns.set_context("notebook", font_scale=0.75) 
+    sns.set_context("notebook", font_scale=0.7) 
     pairplot = sns.pairplot(plot_data, diag_kind='kde', plot_kws={'alpha': 0.6, 's': 80, 'edgecolor': 'k'}, height=4)
     plt.subplots_adjust(bottom=0.04, left=0.03) 
     pairplot.figure.suptitle(f'{dataset_name}', size=12)
