@@ -48,10 +48,15 @@ class SignalOptimizer:
         self.data_loader = DataLoader(filepath, start_date, end_date)
         self.data = self.data_loader.data
 
-        # Directory for output plots and timestamp
-        self.plot_subfolder = os.path.join('indicator_optimizer_plots', self.dataset_name)
+        # Directory for output plots, data, and timestamp
+        self.plot_subfolder = os.path.join('Indicator_Optimizer_Results/Plots', self.dataset_name)
         os.makedirs(self.plot_subfolder, exist_ok=True)
         self.time_now = datetime.now().strftime('%Y%m%d_%H%M%S')
+        results_directory = 'Indicator_Optimizer_Results/Results'
+        os.makedirs(results_directory, exist_ok=True)
+        results_file_name = f"{self.dataset_name}_optimization_results_{self.time_now}_start_{self.start_date}_end_{self.end_date}.txt"
+        self.results_file_path = os.path.join(results_directory, results_file_name)
+        
 
         # Operational parameters and results storage
         self.min_desired_trade_frequency_days = MIN_DESIRED_TRADE_FREQUENCY_DAYS
@@ -319,20 +324,24 @@ def parse_args():
 def run_optimization(filename, pbounds, number_of_cores, start_date, end_date, init_points, iter_points):
     optimizer = SignalOptimizer(filename, pbounds, number_of_cores, start_date, end_date, init_points, iter_points)
     sorted_results = optimizer.optimize()
+    
+    with open(optimizer.results_file_path, 'w') as f:
+        if sorted_results:
+            best_params = sorted_results[0]['params']
+            final_performance, final_buy_points, final_sell_points, total_percent_gain, profit_ratio = optimizer.evaluate_performance(**best_params)
 
-    if sorted_results:
-        best_params = sorted_results[0]['params']
-        final_performance, final_buy_points, final_sell_points, total_percent_gain, profit_ratio = optimizer.evaluate_performance(**best_params)
+            for result in sorted_results:
+                f.write(f"{result}\n")
 
-        print(f"{optimizer.dataset_name}")
-        print(f"Optimized Indicator Parameters: {best_params}")
-        print(f"Best Performance: {final_performance}")
-        print(f"Profit Ratio: {profit_ratio}")
-        print(f"Percent Gain: {total_percent_gain}")
+            print(f"{optimizer.dataset_name}")
+            print(f"Optimized Indicator Parameters: {best_params}")
+            print(f"Best Performance: {final_performance}")
+            print(f"Profit Ratio: {profit_ratio}")
+            print(f"Percent Gain: {total_percent_gain}")
 
-        plot_pair_plot(optimizer.results_df, optimizer.dataset_name, optimizer.start_date, optimizer.end_date, optimizer.time_now, optimizer.plot_subfolder)
-        plot_trades_on_data(optimizer.data, final_buy_points, final_sell_points, optimizer.dataset_name, optimizer.start_date, optimizer.end_date, optimizer.time_now, optimizer.plot_subfolder)
-        plot_parameter_sensitivity(optimizer.results_df, optimizer.dataset_name, start_date, end_date, optimizer.time_now, optimizer.plot_subfolder)
+            plot_pair_plot(optimizer.results_df, optimizer.dataset_name, optimizer.start_date, optimizer.end_date, optimizer.time_now, optimizer.plot_subfolder)
+            plot_trades_on_data(optimizer.data, final_buy_points, final_sell_points, optimizer.dataset_name, optimizer.start_date, optimizer.end_date, optimizer.time_now, optimizer.plot_subfolder)
+            plot_parameter_sensitivity(optimizer.results_df, optimizer.dataset_name, start_date, end_date, optimizer.time_now, optimizer.plot_subfolder)
 
 if __name__ == "__main__":
     args = parse_args()
