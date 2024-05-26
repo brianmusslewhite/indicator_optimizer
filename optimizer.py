@@ -3,7 +3,6 @@ import numpy as np
 import pandas as pd
 import re
 import signal
-import time
 import os
 from datetime import datetime
 from bayes_opt import BayesianOptimization, UtilityFunction
@@ -340,15 +339,10 @@ def run_optimization(filename, pbounds, number_of_cores, start_date, end_date, i
             print(f"Profit Ratio: {profit_ratio}")
             print(f"Percent Gain: {total_percent_gain}")
 
-            plot_pair_plot(optimizer.results_df, optimizer.dataset_name, optimizer.start_date, optimizer.end_date, optimizer.time_now, optimizer.plot_subfolder)
             plot_trades_on_data(optimizer.data, final_buy_points, final_sell_points, optimizer.dataset_name, optimizer.start_date, optimizer.end_date, optimizer.time_now, optimizer.plot_subfolder)
             plot_parameter_sensitivity(optimizer.results_df, optimizer.dataset_name, start_date, end_date, optimizer.time_now, optimizer.plot_subfolder)
+            plot_pair_plot(optimizer.results_df, optimizer.dataset_name, optimizer.start_date, optimizer.end_date, optimizer.time_now, optimizer.plot_subfolder)
 
-            try:
-                while(True):
-                    time.sleep(0.2)
-            except KeyboardInterrupt:
-                print("Ending")
 
 if __name__ == "__main__":
     args = parse_args()
